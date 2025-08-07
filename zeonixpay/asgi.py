@@ -1,5 +1,5 @@
 """
-ASGI config for janata_pay_ltd project.
+ASGI config for zeonixpay project.
 
 It exposes the ASGI callable as a module-level variable named ``application``.
 
@@ -11,6 +11,6 @@ import os
 
 from django.core.asgi import get_asgi_application
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'janata_pay_ltd.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'zeonixpay.settings')
 
 application = get_asgi_application()

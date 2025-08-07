@@ -1,5 +1,5 @@
 """
-WSGI config for janata_pay_ltd project.
+WSGI config for zeonixpay project.
 
 It exposes the WSGI callable as a module-level variable named ``application``.
 
@@ -11,6 +11,6 @@ import os
 
 from django.core.wsgi import get_wsgi_application
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'janata_pay_ltd.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'zeonixpay.settings')
 
 application = get_wsgi_application()

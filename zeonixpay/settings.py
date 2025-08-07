@@ -47,7 +47,7 @@ REST_FRAMEWORK = {
 
 
 
-ROOT_URLCONF = 'janata_pay_ltd.urls'
+ROOT_URLCONF = 'zeonixpay.urls'
 
 TEMPLATES = [
     {
@@ -64,7 +64,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'janata_pay_ltd.wsgi.application'
+WSGI_APPLICATION = 'zeonixpay.wsgi.application'
 
 
 # Database
