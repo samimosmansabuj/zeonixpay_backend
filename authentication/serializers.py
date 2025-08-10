@@ -4,23 +4,28 @@ from .utils import CustomLoginSerializer
 from django.contrib.auth.hashers import make_password
 
 
-
 # ========================Authentication Token Serializer Start================================
 class MerchantLoginSerializer(CustomLoginSerializer):
     def verify_user_role(self, user):
-        if user.role.name == 'Merchant':
-            return {'status': True, 'message': 'merchant user'}
+        if user.status in ['Pending', 'Disable']:
+            return {'status': False, 'message': f'Your account is {user.status}!'}
+            
+        if user.role and user.role.name == 'Merchant':
+            return {'status': True, 'message': 'Merchant user'}
         return {'status': False, 'message': 'This is merchant account credentials!'}
 
 class AdminLoginSerializer(CustomLoginSerializer):
     def verify_user_role(self, user):
-        if user.role.name in ['Admin', 'Staff']:
-            return {'status': True, 'message': 'merchant user'}
+        if user.status in ['Pending', 'Disable']:
+            return {'status': False, 'message': f'Your account is {user.status}!'}
+        
+        if user.role and user.role.name in ['Admin', 'Staff']:
+            return {'status': True, 'message': 'Admin/Staff user'}
         return {'status': False, 'message': 'This is admin or staff account credentials!'}
 
 # ========================Authentication Token Serializer End================================
 
-
+# ========================Registration/Account Create Serializer Start=============================
 class RegistrationSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
@@ -42,14 +47,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
         user = CustomUser.objects.create(**validated_data)
         return user
 
-# class RegisterSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = CustomUser
-#         fields = ['username', 'first_name', 'last_name', 'email', 'phone_number', 'password', 'status', 'role']
-
-    # def create(self, validated_data):
-    #     user = CustomUser.objects.create_user(**validated_data)
-    #     return user
+# ========================Registration/Account Create Serializer End=============================
 
 
 
@@ -86,13 +84,22 @@ class UserIdSerializer(serializers.ModelSerializer):
 
 
 class UserBrandSerializer(serializers.ModelSerializer):
+    user = serializers.PrimaryKeyRelatedField(queryset=CustomUser.objects.all(), required=False)
     class Meta:
         model = UserBrand
         fields = '__all__'
 
 
 class UserPaymentMethodSerializer(serializers.ModelSerializer):
+    user = serializers.PrimaryKeyRelatedField(queryset=CustomUser.objects.all(), required=False)
     class Meta:
         model = UserPaymentMethod
         fields = '__all__'
+    
+    # def validate_brand(self, attrs):
+    #     brand = attrs.user
+    #     return attrs
+    
+    # def validate(self, attrs):
+    #     return super().validate(attrs)
 

@@ -1,5 +1,6 @@
 from pathlib import Path
 from dotenv import load_dotenv
+from datetime import timedelta
 import os
 load_dotenv()
 
@@ -21,7 +22,10 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     
-    'rest_framework_simplejwt', 'rest_framework',
+    #install apps
+    'rest_framework', 'rest_framework_simplejwt',
+    'corsheaders', 'django_extensions', 'django_filters',
+    'rest_framework_simplejwt.token_blacklist',
     
     "authentication", "core",
 ]
@@ -38,10 +42,51 @@ MIDDLEWARE = [
 
 
 
+
+ENABLE_BROWSABLE_API = os.getenv('ENABLE_BROWSABLE_API', 'False') == 'True'
+if ENABLE_BROWSABLE_API:
+    DEFAULT_RENDERER_CLASSES_ = [
+        'rest_framework.renderers.JSONRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer',
+    ]
+else:
+    DEFAULT_RENDERER_CLASSES_ = [
+        'rest_framework.renderers.JSONRenderer'
+    ]
+
 REST_FRAMEWORK = {
+    'DEFAULT_RENDERER_CLASSES': DEFAULT_RENDERER_CLASSES_,
+    
+    # 'DEFAULT_PERMISSION_CLASSES': [
+    #     'rest_framework.permissions.DjangoModelPermissionsOrAnonReadOnly'
+    # ],
+    
+    # 'EXCEPTION_HANDLER': 'authentication.utils.custom_exception_handler',
+    
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-    )
+    ),
+    
+    # 'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
+    # 'PAGE_SIZE': 5,
+    
+    'DEFAULT_FILTER_BACKENDS': (
+        'django_filters.rest_framework.DjangoFilterBackend',
+    ),
+}
+
+
+SIMPLE_JWT = {
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'BLACKLIST_AFTER_ROTATION': True,
+    'ROTATE_REFRESH_TOKENS': True,
+    # 'ROTATE_REFRESH_TOKENS': False,
+    
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=5),
+    # 'ACCESS_TOKEN_LIFETIME': timedelta(minutes=5),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=15),
+    
+    "UPDATE_LAST_LOGIN": True,
 }
 
 
