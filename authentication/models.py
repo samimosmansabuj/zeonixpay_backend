@@ -41,7 +41,7 @@ class UserId(models.Model):
 # ========================================User Wallet Start===================================
 class UserWallet(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='user_wallet')
-    wallet_id = models.UUIDField(default=uuid.uuid4(), unique=True, editable=False)
+    wallet_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     balance = models.DecimalField(max_digits=9, decimal_places=2, default=0)
     withdraw_processing = models.DecimalField(max_digits=9, decimal_places=2, default=0)
     total_withdraw = models.DecimalField(max_digits=9, decimal_places=2, default=0)
@@ -85,7 +85,7 @@ class Merchant(models.Model):
 class UserBrand(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='user_brand')
     merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE, related_name="brands", blank=True, null=True)
-    brand_key = models.UUIDField(default=uuid.uuid4(), editable=False)
+    brand_key = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     
     brand_name = models.CharField(max_length=50)
     mobile_number = models.CharField(max_length=14)
