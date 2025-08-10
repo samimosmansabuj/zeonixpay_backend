@@ -2,7 +2,9 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.contrib.auth.hashers import make_password, check_password
 import uuid
+import secrets
 
 
 class UserRole(models.Model):
@@ -39,7 +41,7 @@ class UserId(models.Model):
 # ========================================User Wallet Start===================================
 class UserWallet(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='user_wallet')
-    wallet_id = models.UUIDField(default=uuid.uuid4().hex, unique=True, editable=False)
+    wallet_id = models.UUIDField(default=uuid.uuid4(), unique=True, editable=False)
     balance = models.DecimalField(max_digits=9, decimal_places=2, default=0)
     withdraw_processing = models.DecimalField(max_digits=9, decimal_places=2, default=0)
     total_withdraw = models.DecimalField(max_digits=9, decimal_places=2, default=0)
@@ -62,9 +64,28 @@ def create_user_ids_and_wallet(sender, instance, created, **kwargs):
 
 
 # ========================================UserBrand Start===================================
+class Merchant(models.Model):
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='merchants')
+    api_key = models.CharField(max_length=128, unique=True)
+    secret_key = models.CharField(max_length=128)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def set_secret(self, raw: str):
+        self.secret_hash = make_password(raw)
+
+    def check_secret(self, raw: str) -> bool:
+        return check_password(raw, self.secret_hash)
+    
+    def save(self, *args, **kwargs):
+        return super().save(*args, **kwargs)
+    
+
+    
 class UserBrand(models.Model):
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='user_model')
-    brand_key = models.UUIDField(default=uuid.uuid4().hex, editable=False)
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='user_brand')
+    merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE, related_name="brands", blank=True, null=True)
+    brand_key = models.UUIDField(default=uuid.uuid4(), editable=False)
     
     brand_name = models.CharField(max_length=50)
     mobile_number = models.CharField(max_length=14)
@@ -72,7 +93,6 @@ class UserBrand(models.Model):
     email = models.EmailField(max_length=200, blank=True, null=True)
     domain_name = models.URLField(max_length=200)
     brand_logo = models.ImageField(upload_to='brand-logo', blank=True, null=True)
-    brand_details = models.JSONField()
     status = models.CharField(max_length=20, choices=(('Active', 'Active'), ('Inactive', 'Inactive')), default='Active')
     fees_type = models.CharField(max_length=10, choices=(('Flat', 'Flat'), ('Parcentage', 'Parcentage')), default='Parcentage')
     fees = models.DecimalField(max_digits=4, decimal_places=2, default=5)
@@ -93,7 +113,7 @@ class UserPaymentMethod(models.Model):
         ('active', 'Active'),
         ('deactive', 'Deactive'),
     )
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='payment_methods')
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='user_payment_methods')
     brand = models.ForeignKey(UserBrand, models.SET_NULL, related_name='payment_methods', blank=True, null=True)
     method_type = models.CharField(max_length=20, choices=METHOD_TYPE)
     params = models.JSONField()

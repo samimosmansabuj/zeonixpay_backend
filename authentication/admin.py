@@ -3,7 +3,7 @@ from authentication.models import CustomUser, UserBrand, UserWallet, UserRole, U
 
 @admin.register(CustomUser)
 class CustomUserAdmin(admin.ModelAdmin):
-    list_display = ('id', 'username', 'email', 'phone_number', 'status', 'role', 'pid')
+    list_display = ('pid', 'username', 'email', 'phone_number', 'status', 'role')
     list_filter = ('status', 'role')
     search_fields = ('username', 'email', 'phone')
 

@@ -3,6 +3,8 @@ from authentication.models import CustomUser, UserBrand, UserWallet
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
 import uuid
+import random
+import string
 
 
 # ============================================Invoice/Cash In Start=======================================
@@ -17,7 +19,8 @@ class Invoice(models.Model):
         ('paid', 'Paid')
     )
     user = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, related_name='invoice', null=True)
-    payment_uid = models.UUIDField(default=uuid.uuid4().hex, editable=False)
+    payment_uid = models.UUIDField(default=uuid.uuid4(), editable=False)
+    bkash_payment_id = models.CharField(blank=True, null=True)
     brand_id = models.ForeignKey(UserBrand, on_delete=models.SET_NULL, related_name='invoice', null=True)
     customer_name = models.CharField(max_length=100)
     customer_number = models.CharField(max_length=14)
@@ -29,11 +32,21 @@ class Invoice(models.Model):
     status = models.CharField(max_length=15, choices=STATUS, default='active')
     pay_status = models.CharField(max_length=15, choices=PAYMENT_STATUS, default='pending')
     transaction_id = models.CharField(blank=True, null=True)
+    invoice_trxn = models.CharField(blank=True, null=True)
     extras = models.TextField(blank=True, null=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
     
+    def generate_invoice_trxn(self):
+        """Generate a unique transaction ID in the format: F37LIY561560"""
+        prefix = ''.join(random.choices(string.ascii_uppercase, k=3))  # 3 random letters (e.g., F37)
+        suffix = ''.join(random.choices(string.digits, k=6))  # 6 random digits (e.g., 561560)
+        return prefix + suffix
+    
     def save(self, *args, **kwargs):
+        if not self.invoice_trxn:
+            self.invoice_trxn = self.generate_invoice_trxn()
+        
         if self.status == 'Active' and self.pay_status == 'Paid' and self.transaction_id:
             wallet_trxn = WalletTransaction.objects.create(
                 wallet = self.user.user_wallet,
@@ -67,7 +80,7 @@ class PaymentTransfer(models.Model):
     )
     user = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, related_name='payment_transfer', null=True)
     brand = models.ForeignKey(UserBrand, on_delete=models.SET_NULL, related_name='payment_transfer', null=True)
-    transfer_id = models.UUIDField(default=uuid.uuid4().hex, editable=False)
+    transfer_id = models.UUIDField(default=uuid.uuid4(), editable=False)
     receiver_name = models.CharField(max_length=100)
     receiver_number = models.CharField(max_length=14)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
