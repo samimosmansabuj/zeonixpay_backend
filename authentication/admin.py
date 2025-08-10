@@ -1,11 +1,18 @@
 from django.contrib import admin
-from authentication.models import CustomUser, UserBrand, UserWallet, UserRole, UserId, UserPaymentMethod
+from authentication.models import CustomUser, UserBrand, UserWallet, UserRole, UserId, UserPaymentMethod, Merchant
 
 @admin.register(CustomUser)
 class CustomUserAdmin(admin.ModelAdmin):
     list_display = ('pid', 'username', 'email', 'phone_number', 'status', 'role')
     list_filter = ('status', 'role')
     search_fields = ('username', 'email', 'phone')
+
+
+@admin.register(Merchant)
+class MerchantAdmin(admin.ModelAdmin):
+    list_display = ('user', 'api_key', 'secret_key', 'is_active', 'created_at')
+    list_filter = ('is_active',)
+    search_fields = ('user', 'api_key', 'secret_key')
 
 
 @admin.register(UserBrand)
