@@ -8,10 +8,10 @@ from .utils import CustomPaymentSectionViewsets, BKashClient, bkash_grant_token,
 from rest_framework.exceptions import NotFound
 from django.views.decorators.csrf import csrf_exempt
 
-
+from authentication.models import Merchant, UserBrand
 from rest_framework import views, status
 from rest_framework.response import Response
-from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.exceptions import NotFound, ValidationError, AuthenticationFailed
 # from django.conf import settings
 from django.shortcuts import redirect
 from django.urls import reverse
@@ -220,11 +220,36 @@ class BKashRefundView(views.APIView):
 
 
 class CreatePaymentInvoice(views.APIView):
+    def authenticate_using_api_key_and_secret(self, request):
+        api_key = request.headers.get("API-KEY")
+        secret_key = request.headers.get("SECRET-KEY")
+        brand_key = request.headers.get("BRAND-KEY")
+        
+
+        if not api_key or not secret_key or not brand_key:
+            raise AuthenticationFailed("Missing API-KEY, SECRET-KEY, or BRAND-KEY.")
+
+        try:
+            merchant = Merchant.objects.get(api_key=api_key, is_active=True)
+        except Merchant.DoesNotExist:
+            raise AuthenticationFailed("Invalid API-KEY.")
+
+        if not merchant.check_secret(secret_key):
+            raise AuthenticationFailed("Invalid SECRET-KEY.")
+
+        try:
+            brand = UserBrand.objects.get(brand_key=brand_key, merchant=merchant, is_active=True)
+        except UserBrand.DoesNotExist:
+            raise AuthenticationFailed("Invalid BRAND-KEY for this merchant.")
+
+        return merchant, brand
+    
     def post(self, request, *args, **kwargs):
+        authen = self.authenticate_using_api_key_and_secret(request)
         return Response(
             {
                 'status': True,
-                'message': 'ok'
+                'message': authen
             }
         )
 

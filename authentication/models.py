@@ -66,19 +66,28 @@ def create_user_ids_and_wallet(sender, instance, created, **kwargs):
 # ========================================UserBrand Start===================================
 class Merchant(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='merchants')
-    api_key = models.CharField(max_length=128, unique=True)
-    secret_key = models.CharField(max_length=128)
+    api_key = models.CharField(max_length=128, unique=True, blank=True, null=True)
+    secret_key = models.CharField(max_length=128, blank=True, null=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def set_secret(self, raw: str):
-        self.secret_hash = make_password(raw)
+        self.secret_key = make_password(raw)
 
     def check_secret(self, raw: str) -> bool:
-        return check_password(raw, self.secret_hash)
+        return check_password(raw, self.secret_key)
     
     def save(self, *args, **kwargs):
-        return super().save(*args, **kwargs)
+        if not self.api_key:
+            self.api_key = secrets.token_urlsafe(32)
+
+        if not self.secret_key:
+            raw_secret = secrets.token_urlsafe(32)
+            self.set_secret(raw_secret)
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f'API Crerendtial for {self.user.username}'
     
 
     
