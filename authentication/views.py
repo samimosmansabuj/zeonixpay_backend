@@ -4,7 +4,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.exceptions import PermissionDenied
 from .models import CustomUser, UserPaymentMethod, UserId, UserRole, Merchant, MerchantWallet
-from .serializers import CustomUserSerializer, RegistrationSerializer, MerchantLoginSerializer, UserBrandSerializer, UserPaymentMethodSerializer, AdminLoginSerializer
+from .serializers import CustomUserSerializer, RegistrationSerializer, MerchantLoginSerializer, UserPaymentMethodSerializer, AdminLoginSerializer, MerchantRegistrationSerializer, MerchantSerializer
 from .utils import CustomTokenObtainPairView, CustomUserCreateAPIView, CustomMerchantUserViewsets
 from .permissions import AdminCreatePermission
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
@@ -14,7 +14,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 # ========================Registration/Account Create Views Start===============================
 class MerchantRegisterView(CustomUserCreateAPIView):
     permission_classes = [AllowAny]
-    serializer_class = RegistrationSerializer
+    serializer_class = MerchantRegistrationSerializer
     error_message = 'Registration Unsuccessfull!'
     success_message = "Registration Successfully Completed!"
 
@@ -136,26 +136,52 @@ class CustomLogOutView(APIView):
 
 # User Profile Views
 class UserProfileView(generics.RetrieveUpdateAPIView):
-    queryset = CustomUser.objects.all()
     serializer_class = CustomUserSerializer
     permission_classes = [IsAuthenticated]
 
     def get_object(self):
         return self.request.user
-
-
-# User Brand Views (for merchants)
-class UserBrandView(CustomMerchantUserViewsets):
-    queryset = Merchant.objects.none
-    serializer_class = UserBrandSerializer
     
-    model = Merchant
-    create_success_message = "Brand Created!"
-    update_success_message = "Brand Updated!"
-    delete_success_message = "Brand Deleted!"
-    not_found_message = "Brand Object Not Found!"
-    
+    def retrieve(self, request, *args, **kwargs):
+        response = super().retrieve(request, *args, **kwargs)
+        return Response(
+                {
+                    'status': True,
+                    'data': response.data
+                }
+            )
 
+class UserMerchantProfileView(generics.RetrieveUpdateAPIView):
+    serializer_class = MerchantSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        try:
+            return Merchant.objects.get(user=self.request.user)
+        except Merchant.DoesNotExist:
+            return Response(
+                {
+                    'status': False,
+                    'message': 'Merchant Profile Not Created!'
+                }, status=status.HTTP_404_NOT_FOUND
+            )
+    
+    def retrieve(self, request, *args, **kwargs):
+        if self.request.user.role.name == 'Merchant':
+            response = super().retrieve(request, *args, **kwargs)
+            return Response(
+                    {
+                        'status': True,
+                        'data': response.data
+                    }
+                )
+        else:
+            return Response(
+                {
+                    'status': False,
+                    'message': 'This is not a merchant account!'
+                }, status=status.HTTP_400_BAD_REQUEST
+            )
 
 # User Payment Method Views
 class UserPaymentMethodView(CustomMerchantUserViewsets):
@@ -168,15 +194,15 @@ class UserPaymentMethodView(CustomMerchantUserViewsets):
     delete_success_message = "Payment Method Deleted!"
     not_found_message = "Payment Method Object Not Found!"
     
-    def check_if_brand_in_this_user(self, serializer):
-        brand = serializer.validated_data.get('brand')
-        if brand not in self.get_user().user_brand.all():
-            raise PermissionDenied("You can't create Payment method for this Brand!")
-    
     def perform_create(self, serializer):
-        self.check_if_brand_in_this_user(serializer)
-        user = self.request.user
-        serializer.save(user=user)
+        merchant = self.request.user.merchant
+        serializer.save(merchant=merchant)
+    
+    def get_queryset(self):
+        merchant = self.get_user().merchant
+        if merchant:
+            return self.model.objects.filter(merchant=merchant)
+        return self.model.objects.none()
     
 
 

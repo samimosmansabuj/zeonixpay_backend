@@ -2,6 +2,7 @@ from rest_framework import serializers
 from .models import CustomUser, UserRole, UserId, UserPaymentMethod, Merchant, MerchantWallet
 from .utils import CustomLoginSerializer
 from django.contrib.auth.hashers import make_password
+from django.db import transaction
 
 
 # ========================Authentication Token Serializer Start================================
@@ -9,7 +10,7 @@ class MerchantLoginSerializer(CustomLoginSerializer):
     def verify_user_role(self, user):
         if user.status in ['Pending', 'Disable']:
             return {'status': False, 'message': f'Your account is {user.status}!'}
-            
+        
         if user.role and user.role.name == 'Merchant':
             return {'status': True, 'message': 'Merchant user'}
         return {'status': False, 'message': 'This is merchant account credentials!'}
@@ -24,6 +25,7 @@ class AdminLoginSerializer(CustomLoginSerializer):
         return {'status': False, 'message': 'This is admin or staff account credentials!'}
 
 # ========================Authentication Token Serializer End================================
+
 
 # ========================Registration/Account Create Serializer Start=============================
 class RegistrationSerializer(serializers.ModelSerializer):
@@ -47,59 +49,120 @@ class RegistrationSerializer(serializers.ModelSerializer):
         user = CustomUser.objects.create(**validated_data)
         return user
 
+class MerchantRegistrationSerializer(serializers.ModelSerializer):
+    brand_name = serializers.CharField(
+        required=True,
+        error_messages={"required": "Brand Name is required."}
+    )
+    whatsapp_number = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True
+    )
+    domain_name = serializers.URLField(
+        required=False,
+    )
+    brand_logo = serializers.FileField(required=False, allow_null=True)
+
+    username = serializers.CharField(
+        required=True,
+        error_messages={"required": "Username is required."}
+    )
+    email = serializers.EmailField(
+        required=True,
+        error_messages={"required": "Email is required."}
+    )
+    password = serializers.CharField(
+        write_only=True,
+        required=True,
+        error_messages={"required": "Password is required."}
+    )
+    first_name = serializers.CharField(
+        required=True,
+        error_messages={"required": "First Name is required."}
+    )
+    last_name = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True
+    )
+    phone_number = serializers.CharField(
+        required=True,
+        error_messages={"required": "Phone Number is required."}
+    )
+
+    class Meta:
+        model = CustomUser
+        fields = (
+            # user
+            "username", "email", "password", "first_name", "last_name", "phone_number",
+            # merchant
+            "brand_name", "whatsapp_number", "domain_name", "brand_logo",
+        )
+
+    def validate_username(self, value):
+        if CustomUser.objects.filter(username=value).exists():
+            raise serializers.ValidationError("username already exists.", code="unique")
+        return value
+
+    def validate_email(self, value):
+        if CustomUser.objects.filter(email=value).exists():
+            raise serializers.ValidationError("email already exists.", code="unique")
+        return value
+
+    def create(self, validated_data):
+        merchant_fields = {
+            "brand_name": validated_data.pop("brand_name"),
+            "whatsapp_number": validated_data.pop("whatsapp_number", None),
+            "domain_name": validated_data.pop("domain_name", None),
+            "brand_logo": validated_data.pop("brand_logo", None),
+            "brand_logo": validated_data.pop("brand_logo", None),
+        }
+
+        password = validated_data.pop("password")
+        validated_data["password"] = make_password(password)
+
+        with transaction.atomic():
+            user = CustomUser.objects.create(**validated_data)
+
+            Merchant.objects.create(
+                user=user,
+                **merchant_fields
+            )
+        return user
+
 # ========================Registration/Account Create Serializer End=============================
 
 
 
 
-
+# ========================Registration/Account Create Serializer Start=============================
 class UserRoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserRole
         fields = '__all__'
-
 
 class CustomUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
         fields = ['id', 'username', 'first_name', 'last_name', 'email', 'phone_number', 'status', 'role', 'pid']
 
-
-
-
-
-
-
+class MerchantSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Merchant
+        fields = '__all__'
 
 class UserWalletSerializer(serializers.ModelSerializer):
     class Meta:
         model = MerchantWallet
         fields = '__all__'
 
-
 class UserIdSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserId
         fields = '__all__'
 
-
-class UserBrandSerializer(serializers.ModelSerializer):
-    user = serializers.PrimaryKeyRelatedField(queryset=CustomUser.objects.all(), required=False)
-    class Meta:
-        model = Merchant
-        fields = '__all__'
-
-
 class UserPaymentMethodSerializer(serializers.ModelSerializer):
-    user = serializers.PrimaryKeyRelatedField(queryset=CustomUser.objects.all(), required=False)
+    # user = serializers.PrimaryKeyRelatedField(queryset=CustomUser.objects.all(), required=False)
     class Meta:
         model = UserPaymentMethod
         fields = '__all__'
-    
-    # def validate_brand(self, attrs):
-    #     brand = attrs.user
-    #     return attrs
-    
-    # def validate(self, attrs):
-    #     return super().validate(attrs)
 
+
+# ========================Registration/Account Create Serializer Start=============================

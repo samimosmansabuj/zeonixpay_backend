@@ -6,7 +6,6 @@ from rest_framework.response import Response
 from rest_framework import status
 from cryptography.fernet import Fernet
 import json
-import cryptography
 import base64
 
 class DataEncryptDecrypt:
@@ -37,7 +36,6 @@ class DataEncryptDecrypt:
         return json_data
 
 
-
 class CustomPaymentSectionViewsets(viewsets.ModelViewSet):
     permission_classes = [IsOwnerByUser]
     pagination_class = None
@@ -60,31 +58,16 @@ class CustomPaymentSectionViewsets(viewsets.ModelViewSet):
     
     #-------------Object Queryset-----------------------
     def get_queryset(self):
-        user = self.get_user()
-        if user:
-            return self.model.objects.filter(user=user).order_by(self.ordering_by)
+        merchant = self.get_user().merchant
+        if merchant:
+            return self.model.objects.filter(merchant=merchant).order_by(self.ordering_by)
         return self.model.objects.none()
     
     
-    
     #-------------Created-------------------------------
-    def json_encrypted(self, post_data):
-        url_json = {
-            "success_url": post_data.get("success_url", ""),
-            "cancel_url": post_data.get("cancel_url", ""),
-            "failed_url": post_data.get("failed_url", ""),
-        }
-        object = DataEncryptDecrypt()
-        encrypt_data_json = object.encrypt_data(url_json)
-        post_data['data'] = json.dumps(encrypt_data_json)
-        return post_data
-    
-    
     def create(self, request, *args, **kwargs):
         try:
-            post_data = request.data.copy()
-            data = self.json_encrypted(post_data)
-            serializer = self.get_serializer(data=data)
+            serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             self.perform_create(serializer)
             return Response(
@@ -113,7 +96,6 @@ class CustomPaymentSectionViewsets(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         user = self.request.user
         serializer.save(user=user)
-    
     
     #-------------------Queryset List-------------------
     def list(self, request, *args, **kwargs):
