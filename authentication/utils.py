@@ -36,6 +36,7 @@ class CustomLoginSerializer(serializers.Serializer):
             refresh = RefreshToken.for_user(user)
             return {
                 'user': user.pid,
+                'role': user.role.name,
                 'refresh': str(refresh),
                 'access': str(refresh.access_token)
             }

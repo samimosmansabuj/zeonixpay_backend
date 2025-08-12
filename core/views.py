@@ -1,30 +1,15 @@
-from rest_framework import generics, views, status
-from django.shortcuts import redirect
+from rest_framework import views, status
+from django.shortcuts import redirect, get_object_or_404
+from django.urls import reverse
 from rest_framework.response import Response
 from .models import Invoice, PaymentTransfer, WithdrawRequest, WalletTransaction
 from .serializers import InvoiceSerializer, PaymentTransferSerializer, WithdrawRequestSerializer, WalletTransactionSerializer
 from authentication.permissions import IsOwnerByUser
-from .utils import CustomPaymentSectionViewsets, BKashClient, bkash_grant_token, BkashPayment, bkash_create_payment, bkash_execute_payment
-from rest_framework.exceptions import NotFound
-from django.views.decorators.csrf import csrf_exempt
-
-from authentication.models import Merchant, UserBrand
-from rest_framework import views, status
-from rest_framework.response import Response
+from .utils import CustomPaymentSectionViewsets, DataEncryptDecrypt
 from rest_framework.exceptions import NotFound, ValidationError, AuthenticationFailed
-# from django.conf import settings
-from django.shortcuts import redirect
-from django.urls import reverse
-
-from .models import Invoice
-from .serializers import InvoiceSerializer
+from authentication.models import Merchant, UserBrand
 from .payment.bkash import BKashClient, BKashError
 from .payment import bkash
-
-import requests
-from dotenv import load_dotenv
-import os
-load_dotenv()
 
 
 
@@ -50,6 +35,8 @@ class InvoiceViewSet(CustomPaymentSectionViewsets):
                 'status': False,
                 'message': self.not_found_message
             })
+
+
 
 class GetOnlinePayment(views.APIView):
     def get(self, request, *args, **kwargs):
@@ -77,7 +64,7 @@ class GetOnlinePayment(views.APIView):
             )
         
         payment_methods = [
-            {"method": "bkash", "name": f"<a href='http://127.0.0.1:8000/api/v1/invoice/{payment_uid}/get-payment/bkash/'>Bkash</a>"},
+            {"method": "bkash", "name": f"<a href=f'{bkash.BKASH_CALLBACK_BASE_URL}/api/v1/invoice/{payment_uid}/get-payment/bkash/'>Bkash</a>"},
             {"method": "nagad", "name": "Nagad"},
             {"method": "rocket", "name": "Rocket"},
             {"method": "bank", "name": "Bank"}
@@ -87,6 +74,7 @@ class GetOnlinePayment(views.APIView):
             'status': True,
             'payment_methods': payment_methods
         }, status=status.HTTP_200_OK)
+
 
 # ===============================================================================================
 class BKashCreatePaymentView(views.APIView):
@@ -99,6 +87,8 @@ class BKashCreatePaymentView(views.APIView):
             raise NotFound("Invoice not found.")
 
         client = BKashClient()
+        callback_url = f"{bkash.BKASH_CALLBACK_BASE_URL}{reverse('bkash_callback', kwargs={'payment_uid': str(payment_uid)})}"
+        print(callback_url)
         try:
             resp = client.create_payment(
                 amount=invoice.customer_amount,
@@ -106,7 +96,7 @@ class BKashCreatePaymentView(views.APIView):
                 merchant_invoice_number=str(invoice.payment_uid),
                 payer_reference=str(invoice.invoice_trxn),
                 mode="0011",
-                callback_url=bkash.BKASH_CALLBACK_URL
+                callback_url=callback_url
             )
         except BKashError as e:
             return Response({"status": False, "message": str(e)}, status=502)
@@ -116,8 +106,8 @@ class BKashCreatePaymentView(views.APIView):
 
         if payment_id:
             invoice.bkash_payment_id = payment_id
-            invoice.status = "pending"
-            invoice.save(update_fields=["bkash_payment_id", "status"])
+            invoice.pay_status = "pending"
+            invoice.save(update_fields=["bkash_payment_id", "pay_status"])
 
         if request.query_params.get("redirect") in ("1", "true", "yes"):
             if bkash_redirect_url:
@@ -138,56 +128,64 @@ class BKashCreatePaymentView(views.APIView):
         return self._create_and_maybe_redirect(request, kwargs.get("payment_uid") or request.data.get("payment_uid"))
 
 
-class BKashExecutePaymentView(views.APIView):
-    """
-    bKash redirects the user back to your callback URL after authorization,
-    typically with a paymentID. You can:
-      - execute here and redirect to your invoice page, or
-      - return JSON and let frontend poll/confirm.
-    We'll execute and then redirect.
-    """
-    authentication_classes = []  # usually public
-    permission_classes = []
-
+class BKashCallbackView(views.APIView):
     def get(self, request, *args, **kwargs):
-        payment_id = request.query_params.get("paymentID") or request.query_params.get("paymentId")
-        if not payment_id:
-            return Response({"status": False, "message": "paymentID missing"}, status=400)
+        payment_uid = kwargs.get('payment_uid')
+        payment_id = request.GET.get("paymentID")
+        status = request.GET.get("status")
+        # signature = request.GET.get("signature")
 
-        # Find the invoice by payment_id (you stored it earlier)
-        try:
-            invoice = Invoice.objects.get(bkash_payment_id=payment_id)
-        except Invoice.DoesNotExist:
-            # Fallback: you might pass payment_uid in return URL and use that instead
-            return Response({"status": False, "message": "Invoice not found for paymentID"}, status=404)
-
+        if not payment_id or not status:
+            raise ValidationError("Missing paymentID or status.")
+        
         client = BKashClient()
         try:
-            exec_resp = client.execute_payment(payment_id)
+            response = client.execute_payment(payment_id=payment_id)
         except BKashError as e:
-            # mark failed
-            invoice.status = "failed"
-            invoice.save(update_fields=["status"])
             return Response({"status": False, "message": str(e)}, status=502)
 
-        # Interpret execute response
-        trx_id = exec_resp.get("trxID") or exec_resp.get("transactionID")
-        status_code = exec_resp.get("statusCode") or exec_resp.get("status")  # depends on sandbox payload
-        status_msg = exec_resp.get("statusMessage") or exec_resp.get("message", "")
-        success = bool(trx_id) and str(status_code) in ("0000", "Success", "Completed", "200")
+        invoice = get_object_or_404(Invoice, bkash_payment_id=payment_id, payment_uid=payment_uid)
 
-        if success:
-            invoice.status = "paid"
-            invoice.bkash_trx_id = trx_id
-            invoice.save(update_fields=["status", "bkash_trx_id"])
+        # Success: Payment completed successfully
+        if status == "success" and response.get("transactionStatus") == "Completed":
+            invoice.pay_status = "paid"
+            invoice.save()
+            return Response({
+                "status": True,
+                "message": "Payment has been successfully completed.",
+                "data": response
+            }, status=200)
+        
+        # Failure: Payment failed
+        elif status == "failure":
+            invoice.pay_status = "failed"
+            invoice.save()
+            return Response({
+                "status": False,
+                "message": "Payment failed. Please try again.",
+                "data": response
+            }, status=400)
+        
+        # Cancel: Payment was canceled
+        elif status == "cancel":
+            print(invoice.status)
+            invoice.pay_status = "cancelled"
+            invoice.save()
+            print(invoice.status)
+            return Response({
+                "status": False,
+                "message": "Payment was canceled by the user.",
+                "data": response
+            }, status=400)
+        
+        # Unknown status: In case status is something unexpected
         else:
-            invoice.status = "failed"
-            invoice.save(update_fields=["status"])
+            return Response({
+                "status": False,
+                "message": "Unknown status received. Please contact support.",
+                "data": response
+            }, status=400)
 
-        # Redirect the user back to your invoice page in the frontend
-        # Include any info you want the frontend to show.
-        redirect_to = f"{bkash.BKASH_CALLBACK_URL}?payment_uid={invoice.payment_uid}&result={'success' if success else 'failed'}"
-        return redirect(redirect_to)
 
 
 class BKashQueryPaymentView(views.APIView):
@@ -219,23 +217,22 @@ class BKashRefundView(views.APIView):
 # ===============================================================================================
 
 
-class CreatePaymentInvoice(views.APIView):
+class CreatePayment(views.APIView):
     def authenticate_using_api_key_and_secret(self, request):
         api_key = request.headers.get("API-KEY")
         secret_key = request.headers.get("SECRET-KEY")
         brand_key = request.headers.get("BRAND-KEY")
-        
 
         if not api_key or not secret_key or not brand_key:
             raise AuthenticationFailed("Missing API-KEY, SECRET-KEY, or BRAND-KEY.")
 
         try:
-            merchant = Merchant.objects.get(api_key=api_key, is_active=True)
+            merchant = Merchant.objects.get(api_key=api_key, secret_key=secret_key, is_active=True)
         except Merchant.DoesNotExist:
             raise AuthenticationFailed("Invalid API-KEY.")
 
-        if not merchant.check_secret(secret_key):
-            raise AuthenticationFailed("Invalid SECRET-KEY.")
+        # if not merchant.check_secret(secret_key):
+        #     raise AuthenticationFailed("Invalid SECRET-KEY.")
 
         try:
             brand = UserBrand.objects.get(brand_key=brand_key, merchant=merchant, is_active=True)
@@ -244,190 +241,49 @@ class CreatePaymentInvoice(views.APIView):
 
         return merchant, brand
     
+    def json_encrypted(self, post_data):
+        url_json = {
+            "success_url": post_data.get("success_url"),
+            "cancel_url": post_data.get("cancel_url"),
+            "failed_url": post_data.get("failed_url"),
+        }
+        object = DataEncryptDecrypt()
+        encrypted_data = object.encrypt_data(url_json)
+        post_data['data'] = str(encrypted_data)
+        return post_data
+    
     def post(self, request, *args, **kwargs):
-        authen = self.authenticate_using_api_key_and_secret(request)
-        return Response(
-            {
-                'status': True,
-                'message': authen
-            }
-        )
+        try:
+            merchant, brand = self.authenticate_using_api_key_and_secret(request)
+            post_data = request.data.copy()
+            data = self.json_encrypted(post_data)
+            serializer = InvoiceSerializer(data=data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save(user=merchant.user, brand_id=brand)
+            invoice = serializer.instance
+            
+            if invoice.method:
+                if invoice.method.lower() == 'bkash':
+                    url = reverse('get-payment-bkash', kwargs={'payment_uid': str(invoice.payment_uid)})
+                    return redirect(f"{url}?redirect=1")
+                    # return redirect(f"{url}")
+                elif invoice.method.lower() == 'nagad':
+                    return Response(
+                        {
+                            'message': 'Redirect Nagad Payment Gateway URL!'
+                        }
+                    )
+            else:
+                return redirect('get-payment', payment_uid=invoice.payment_uid)
+        except Exception as e:
+            return Response(
+                {
+                    'status': False,
+                    'message': str(e)
+                }
+            )
 
 
-
-
-
-
-# class BkashExecutePaymentView(views.APIView):
-#     def get(self, request):
-#         payment_id = request.query_params.get("paymentID")
-#         token = bkash_grant_token().get("id_token")
-
-#         exec_data = bkash_execute_payment(token, payment_id)
-
-#         if exec_data.get("transactionStatus") == "Completed":
-#             invoice_no = exec_data.get("merchantInvoiceNumber")
-#             Invoice.objects.filter(id=invoice_no).update(status="paid")
-#             return redirect("/payment-success/")
-#         else:
-#             return redirect("/payment-failed/")
-
-
-# class CreatePaymentViewWithBkash(views.APIView):
-#     def post(self, request, *args, **kwargs):
-#         payment_uid = self.kwargs.get('payment_uid')
-#         # payment_uid = request.data.get('payment_uid')
-#         invoice = Invoice.objects.get(payment_uid=payment_uid)
-#         if not invoice:
-#             return Response({"status": False, "message": "Invoice not found"}, status=404)
-
-        
-#         token = bkash_grant_token().get("id_token")
-#         create_payload = bkash_create_payment(token, invoice.customer_amount, invoice.payment_uid)
-#         bkash_url = create_payload.get("bkashURL")
-#         if not bkash_url:
-#             return Response({"status": False, "message": "bKash did not return bkashURL", "detail": create_payload}, status=400)
-
-#         return Response({"status": True, "redirect_url": bkash_url, "payment_id": create_payload.get("paymentID")}, status=200)
-
-        # client = BkashPayment()
-        # create_data = client._create_payment(amount=100, invoice_number=555)
-        # if create_data.get("bkashURL"):
-        #     return Response({"redirect_url": create_data["bkashURL"]})
-        # return Response({"status": False, "message": create_data}, status=400)
-        
-        # client = BKashClient()
-        # grant_token = client._grant_token()
-        
-        # token = bkash_grant_token.get("id_token")
-        # create_data = bkash_create_payment
-        
-        
-        
-        
-        # return Response(
-        #     {
-        #         'status': True,
-        #         'message': "ok",
-        #         "data": create_payment
-        #     }, status=status.HTTP_200_OK
-        # )
-        
-        
-
-
-
-# class CreatePaymentView(views.APIView):
-#     def post(self, request, *args, **kwargs):
-        
-#         grant_response = requests.post(grant_token_url, headers=headers, data=data)
-        
-#         if grant_response.status_code != 200:
-#             return Response({
-#                 'status': False,
-#                 'message': "Failed to grant token"
-#             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-#         grant_token = grant_response.json().get('token')
-
-#         # Step 2: Create Payment (Sale or Authorize)
-#         payment_create_url = "https://checkout.sandbox.bka.sh/v1.2.0-beta/checkout/payment/create"
-#         payment_data = {
-#             "amount": str(invoice.customer_amount),
-#             "currency": "BDT",
-#             "intent": "sale",  # Sale intent for a direct payment
-#             "merchantInvoiceNumber": invoice.payment_uid,
-#             "merchantAssociationInfo": "Merchant info",
-#         }
-#         payment_headers = {
-#             'Authorization': f'Bearer {grant_token}',
-#             'X-APP-Key': settings.BKASH_APP_KEY
-#         }
-#         payment_response = requests.post(payment_create_url, headers=payment_headers, data=payment_data)
-
-#         if payment_response.status_code != 200:
-#             return Response({
-#                 'status': False,
-#                 'message': "Failed to create payment"
-#             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-#         payment_info = payment_response.json()
-#         payment_id = payment_info.get('paymentID')
-
-#         # Step 3: Execute Payment
-#         execute_payment_url = f"https://checkout.sandbox.bka.sh/v1.2.0-beta/checkout/payment/execute/{payment_id}"
-#         execute_response = requests.post(execute_payment_url, headers=payment_headers)
-
-#         if execute_response.status_code == 200:
-#             # Redirect the user after successful payment
-#             return Response({
-#                 'status': True,
-#                 'message': "Payment successful",
-#                 'payment_details': execute_response.json()
-#             }, status=status.HTTP_200_OK)
-#         else:
-#             return Response({
-#                 'status': False,
-#                 'message': "Payment execution failed"
-#             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-
-
-
-
-# class InvoiceDetailView(generics.RetrieveUpdateDestroyAPIView):
-#     queryset = Invoice.objects.all()
-#     serializer_class = InvoiceSerializer
-#     permission_classes = [permissions.IsAuthenticated]
-
-
-# Payment Transfer Views
-# class PaymentTransferListCreateView(generics.ListCreateAPIView):
-#     queryset = PaymentTransfer.objects.all().order_by('-id')
-#     serializer_class = PaymentTransferSerializer
-#     permission_classes = [permissions.IsAuthenticated]
-
-#     def perform_create(self, serializer):
-#         serializer.save(user=self.request.user)
-
-
-# class PaymentTransferDetailView(generics.RetrieveUpdateDestroyAPIView):
-#     queryset = PaymentTransfer.objects.all()
-#     serializer_class = PaymentTransferSerializer
-#     permission_classes = [permissions.IsAuthenticated]
-
-
-# # Withdraw Request Views
-# class WithdrawRequestListCreateView(generics.ListCreateAPIView):
-#     queryset = WithdrawRequest.objects.all().order_by('-id')
-#     serializer_class = WithdrawRequestSerializer
-#     permission_classes = [permissions.IsAuthenticated]
-
-#     def perform_create(self, serializer):
-#         serializer.save(user=self.request.user)
-
-
-# class WithdrawRequestDetailView(generics.RetrieveUpdateDestroyAPIView):
-#     queryset = WithdrawRequest.objects.all()
-#     serializer_class = WithdrawRequestSerializer
-#     permission_classes = [permissions.IsAuthenticated]
-
-
-# # Wallet Transaction Views
-# class WalletTransactionListCreateView(generics.ListCreateAPIView):
-#     queryset = WalletTransaction.objects.all().order_by('-id')
-#     serializer_class = WalletTransactionSerializer
-#     permission_classes = [permissions.IsAuthenticated]
-
-#     def perform_create(self, serializer):
-#         serializer.save(user=self.request.user)
-
-
-# class WalletTransactionDetailView(generics.RetrieveUpdateDestroyAPIView):
-#     queryset = WalletTransaction.objects.all()
-#     serializer_class = WalletTransactionSerializer
-#     permission_classes = [permissions.IsAuthenticated]
 
 
 
