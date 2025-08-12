@@ -1,6 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import InvoiceViewSet, GetOnlinePayment, BKashCreatePaymentView, CreatePayment, BKashCallbackView
+from .views import InvoiceViewSet, GetOnlinePayment, CreatePayment
+from .payment.bkash import BKashCreatePaymentView, BKashCallbackView
 
 router = DefaultRouter()
 router.register(r'invoice', InvoiceViewSet, basename='invoice')

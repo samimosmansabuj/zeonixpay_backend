@@ -2,6 +2,16 @@ from dotenv import load_dotenv
 from django.core.cache import cache
 import os
 import requests
+from rest_framework import views
+from django.shortcuts import redirect, get_object_or_404
+from django.urls import reverse
+from rest_framework.response import Response
+from core.models import Invoice
+from rest_framework.exceptions import NotFound, ValidationError, AuthenticationFailed
+from core.utils import DataEncryptDecrypt
+import json
+import base64
+
 
 load_dotenv()
 
@@ -154,4 +164,152 @@ class BKashClient:
             raise BKashError(f"Refund failed: {r.status_code} {r.text}")
         return r.json()
 
+
+
+# ===============================================================================================
+class BKashCreatePaymentView(views.APIView):
+    def _create_and_maybe_redirect(self, request, payment_uid: str):
+        if not payment_uid:
+            raise ValidationError({"payment_uid": "This field is required."})
+        try:
+            invoice = Invoice.objects.get(payment_uid=payment_uid)
+        except Invoice.DoesNotExist:
+            raise NotFound("Invoice not found.")
+
+        client = BKashClient()
+        callback_url = f"{BKASH_CALLBACK_BASE_URL}{reverse('bkash_callback', kwargs={'payment_uid': str(payment_uid)})}"
+        try:
+            resp = client.create_payment(
+                amount=invoice.customer_amount,
+                intent="sale",
+                merchant_invoice_number=str(invoice.payment_uid),
+                payer_reference=str(invoice.invoice_trxn),
+                mode="0011",
+                callback_url=callback_url
+            )
+        except BKashError as e:
+            return Response({"status": False, "message": str(e)}, status=502)
+
+        payment_id = resp.get("paymentID")
+        bkash_redirect_url = resp.get("bkashURL") or resp.get("bkashUrl") or resp.get("redirectURL")
+
+        if payment_id:
+            invoice.bkash_payment_id = payment_id
+            invoice.pay_status = "pending"
+            invoice.save(update_fields=["bkash_payment_id", "pay_status"])
+
+        if request.query_params.get("redirect") in ("1", "true", "yes"):
+            if bkash_redirect_url:
+                return redirect(bkash_redirect_url)
+            return Response({"status": False, "message": "No bKash redirect URL returned."}, status=502)
+        
+        return Response({
+            "status": True,
+            "paymentID": payment_id,
+            "redirectURL": bkash_redirect_url,
+            "raw": resp
+        }, status=200)
+    
+    def get(self, request, *args, **kwargs):
+        return self._create_and_maybe_redirect(request, kwargs.get("payment_uid"))
+    
+    # def post(self, request, *args, **kwargs):
+    #     return self._create_and_maybe_redirect(request, kwargs.get("payment_uid") or request.data.get("payment_uid"))
+
+
+class BKashCallbackView(views.APIView):
+    def decrypt_data(self, data_json):
+        print(data_json['key'])
+        encrypt_decrypt = DataEncryptDecrypt(data_json['key'])
+        decrypt_data_json = encrypt_decrypt.decrypt_data(data_json['code'])
+        return decrypt_data_json
+    
+    def get(self, request, *args, **kwargs):
+        payment_uid = kwargs.get('payment_uid')
+        payment_id = request.GET.get("paymentID")
+        status = request.GET.get("status")
+        # signature = request.GET.get("signature")
+
+        if not payment_id or not status:
+            raise ValidationError("Missing paymentID or status.")
+        
+        client = BKashClient()
+        try:
+            response = client.execute_payment(payment_id=payment_id)
+        except BKashError as e:
+            return Response({"status": False, "message": str(e)}, status=502)
+
+        invoice = get_object_or_404(Invoice, bkash_payment_id=payment_id, payment_uid=payment_uid)
+        client_callback_url = self.decrypt_data(json.loads(invoice.data))
+        
+
+        # Success: Payment completed successfully
+        if status == "success" and response.get("transactionStatus") == "Completed":
+            invoice.pay_status = "paid"
+            invoice.save()
+            return Response({
+                "status": True,
+                "message": "Payment has been successfully completed.",
+                "data": response
+            }, status=200)
+        
+        # Failure: Payment failed
+        elif status == "failure":
+            invoice.pay_status = "failed"
+            invoice.save()
+            return Response({
+                "status": False,
+                "message": "Payment failed. Please try again.",
+                "data": response
+            }, status=400)
+        
+        # Cancel: Payment was canceled
+        elif status == "cancel":
+            print(invoice.status)
+            invoice.pay_status = "cancelled"
+            invoice.save()
+            print(invoice.status)
+            return Response({
+                "status": False,
+                "message": "Payment was canceled by the user.",
+                "data": response
+            }, status=400)
+        
+        # Unknown status: In case status is something unexpected
+        else:
+            return Response({
+                "status": False,
+                "message": "Unknown status received. Please contact support.",
+                "data": response
+            }, status=400)
+
+
+
+class BKashQueryPaymentView(views.APIView):
+    def get(self, request, *args, **kwargs):
+        payment_id = request.query_params.get("paymentID")
+        if not payment_id:
+            return Response({"status": False, "message": "paymentID missing"}, status=400)
+        client = BKashClient()
+        try:
+            data = client.query_payment(payment_id)
+        except BKashError as e:
+            return Response({"status": False, "message": str(e)}, status=502)
+        return Response({"status": True, "data": data})
+
+
+class BKashRefundView(views.APIView):
+    def post(self, request, *args, **kwargs):
+        payment_id = request.data.get("paymentID")
+        trx_id = request.data.get("trxID")
+        amount = request.data.get("amount")
+        if not (payment_id and trx_id and amount):
+            raise ValidationError({"detail": "paymentID, trxID and amount are required."})
+        client = BKashClient()
+        try:
+            data = client.refund(amount=amount, payment_id=payment_id, trx_id=trx_id, sku=request.data.get("sku"), reason=request.data.get("reason"))
+        except BKashError as e:
+            return Response({"status": False, "message": str(e)}, status=502)
+        return Response({"status": True, "data": data})
+# ===============================================================================================
 

@@ -1,5 +1,5 @@
 from django.db import models
-from authentication.models import CustomUser, UserBrand, UserWallet
+from authentication.models import CustomUser, Merchant, APIKey, MerchantWallet
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
 import uuid
@@ -8,8 +8,6 @@ import string
 
 
 # ============================================Invoice/Cash In Start=======================================
-
-
 class Invoice(models.Model):
     STATUS = (
         ('active', 'Active'),
@@ -22,18 +20,17 @@ class Invoice(models.Model):
         ('failed', 'Failed'),
         ('cancelled', 'Cancelled'),
     )
-    user = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, related_name='invoice', null=True)
-    brand_id = models.ForeignKey(UserBrand, on_delete=models.SET_NULL, related_name='invoice', null=True)
+    merchant = models.ForeignKey(Merchant, on_delete=models.SET_NULL, related_name='invoices', null=True)
     
-    payment_uid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
-    data = models.CharField(max_length=500, blank=True, null=True)
-    bkash_payment_id = models.CharField(blank=True, null=True)
+    invoice_payment_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    data = models.JSONField(blank=True, null=True)
+    method_payment_id = models.CharField(blank=True, null=True)
     
     customer_order_id = models.CharField(max_length=100, blank=True, null=True)
     customer_name = models.CharField(max_length=100)
     customer_number = models.CharField(max_length=14)
     customer_amount = models.DecimalField(max_digits=6, decimal_places=2)
-    customer_email = models.EmailField(max_length=200)
+    customer_email = models.EmailField(max_length=200, blank=True, null=True)
     customer_address = models.CharField(blank=True, null=True)
     customer_description = models.TextField(blank=True, null=True)
     method = models.CharField(max_length=50, blank=True, null=True)
@@ -60,9 +57,9 @@ class Invoice(models.Model):
             self.invoice_trxn = self.generate_invoice_trxn()
         
         if self.status == 'Active' and self.pay_status == 'Paid' and self.transaction_id:
-            wallet_trxn = WalletTransaction.objects.create(
-                wallet = self.user.user_wallet,
-                brand = self.brand_id,
+            WalletTransaction.objects.create(
+                wallet = self.merchant.merchant_wallet,
+                merchant = self.merchant,
                 service = self,
                 amount = self.customer_amount,
                 method = self.method,
@@ -73,7 +70,7 @@ class Invoice(models.Model):
         return super().save(*args, **kwargs)
     
     def __str__(self):
-        return f"Invoice#{self.payment_uid}"
+        return f"Invoice#{self.invoice_payment_id}"
 
 # ============================================Invoice/Cash In End=======================================
 
@@ -90,9 +87,8 @@ class PaymentTransfer(models.Model):
     STATUS = (
         ('pending', 'Pending'), ('success', 'Success'), ('rejected', 'Rejected')
     )
-    user = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, related_name='payment_transfer', null=True)
-    brand = models.ForeignKey(UserBrand, on_delete=models.SET_NULL, related_name='payment_transfer', null=True)
-    transfer_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    merchant = models.ForeignKey(Merchant, on_delete=models.SET_NULL, related_name='payment_transfer', null=True)
+    transfer_id = models.UUIDField(default=uuid.uuid4(), editable=False, unique=True)
     receiver_name = models.CharField(max_length=100)
     receiver_number = models.CharField(max_length=14)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
@@ -105,8 +101,9 @@ class PaymentTransfer(models.Model):
     
     def save(self, *args, **kwargs):
         if self.status == 'Success' and self.transfer_id:
-            wallet_trxn = WalletTransaction.objects.create(
-                wallet = self.user.user_wallet,
+            WalletTransaction.objects.create(
+                wallet = self.merchant.merchant_wallet,
+                merchant = self.merchant,
                 service = self,
                 amount = self.net_amount,
                 method = self.payment_method,
@@ -124,8 +121,7 @@ class WithdrawRequest(models.Model):
     STATUS = (
         ('pending', 'Pending'), ('success', 'Success'), ('rejected', 'Rejected')
     )
-    user = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, related_name='withdrawrequest', blank=True, null=True)
-    wallet = models.ForeignKey(UserWallet, on_delete=models.SET_NULL, related_name='withdrawrequest', blank=True, null=True)
+    merchant = models.ForeignKey(Merchant, on_delete=models.SET_NULL, related_name='withdrawrequest', blank=True, null=True)
     
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     charge = models.DecimalField(max_digits=12, decimal_places=2)
@@ -138,8 +134,9 @@ class WithdrawRequest(models.Model):
     
     def save(self, *args, **kwargs):
         if self.status == 'Success' and self.trx_id:
-            wallet_trxn = WalletTransaction.objects.create(
-                wallet = self.wallet,
+            WalletTransaction.objects.create(
+                wallet = self.merchant.merchant_wallet,
+                merchant = self.merchant,
                 service = self,
                 amount = self.net_amount,
                 method = self.method,
@@ -147,7 +144,6 @@ class WithdrawRequest(models.Model):
                 trx_id=self.transaction_id,
                 tran_type='debit'
             )
-        
         return super().save(*args, **kwargs)
 
 # ======================================Withdraw Request/Cash Out End=================================
@@ -157,8 +153,8 @@ class WithdrawRequest(models.Model):
 
 # ========================================Wallet Transaction Start===================================
 class WalletTransaction(models.Model):
-    wallet = models.ForeignKey(UserWallet, on_delete=models.SET_NULL, related_name='wallet_transaction', blank=True, null=True)
-    brand = models.ForeignKey(UserBrand, on_delete=models.CASCADE, related_name='wallet_transaction', blank=True, null=True)
+    wallet = models.ForeignKey(MerchantWallet, on_delete=models.SET_NULL, related_name='wallet_transaction', blank=True, null=True)
+    merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE, related_name='wallet_transaction', blank=True, null=True)
     content_type = models.ForeignKey(ContentType, on_delete=models.SET_NULL, blank=True, null=True)
     object_id = models.PositiveIntegerField(blank=True, null=True)
     service = GenericForeignKey('content_type', 'object_id')
