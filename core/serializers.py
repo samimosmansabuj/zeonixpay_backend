@@ -8,6 +8,11 @@ class InvoiceSerializer(serializers.ModelSerializer):
         model = Invoice
         fields = '__all__'
 
+class CreatePaymentSerializer(serializers.ModelSerializer):
+    
+    class Meta:
+        model = Invoice
+        fields = '__all__'
 
 class PaymentTransferSerializer(serializers.ModelSerializer):
     class Meta:

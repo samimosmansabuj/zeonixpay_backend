@@ -1,4 +1,3 @@
-from rest_framework.response import Response
 from dotenv import load_dotenv
 from django.core.cache import cache
 import os
@@ -11,7 +10,7 @@ BKASH_APP_KEY = os.getenv("BKASH_APP_KEY")
 BKASH_APP_SECRET = os.getenv("BKASH_APP_SECRET")
 BKASH_USERNAME = os.getenv("BKASH_USERNAME")
 BKASH_PASSWORD = os.getenv("BKASH_PASSWORD")
-BKASH_CALLBACK_URL = os.getenv("BKASH_CALLBACK_URL")
+BKASH_CALLBACK_BASE_URL = os.getenv("BKASH_CALLBACK_BASE_URL")
 
 BKASH_ID_TOKEN_CACHE_KEY = "bkash:id_token"
 BKASH_REFRESH_TOKEN_CACHE_KEY = "bkash:refresh_token"
@@ -84,14 +83,14 @@ class BKashClient:
         token = cache.get(BKASH_ID_TOKEN_CACHE_KEY)
         if token:
             return token
-        # Try refresh
+        
         refresh_token = cache.get(BKASH_REFRESH_TOKEN_CACHE_KEY)
         if refresh_token:
             try:
                 return self._refresh_token(refresh_token)
             except Exception:
                 pass
-        # Fallback to grant
+        
         return self._grant_token()
 
     def _headers_auth(self):
@@ -106,7 +105,7 @@ class BKashClient:
         url = f"{self.base}create"
         payload = {
             "mode": mode,  # tokenization mode per bKash docs (sandbox often "0011")
-            "callbackURL": callback_url or BKASH_CALLBACK_URL,
+            "callbackURL": callback_url,
             "amount": str(amount),
             "currency": "BDT",
             "intent": intent,

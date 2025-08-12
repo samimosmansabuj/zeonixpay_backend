@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import InvoiceViewSet, GetOnlinePayment, BKashCreatePaymentView, CreatePaymentInvoice
+from .views import InvoiceViewSet, GetOnlinePayment, BKashCreatePaymentView, CreatePayment, BKashCallbackView
 
 router = DefaultRouter()
 router.register(r'invoice', InvoiceViewSet, basename='invoice')
@@ -8,11 +8,14 @@ router.register(r'invoice', InvoiceViewSet, basename='invoice')
 
 urlpatterns = [
     path('<pid>/', include(router.urls)),
+    
     path('invoice/<str:payment_uid>/get-payment/', GetOnlinePayment.as_view(), name='get-payment'),
     path('invoice/<str:payment_uid>/get-payment/bkash/', BKashCreatePaymentView.as_view(), name='get-payment-bkash'),
     
     
-    path('payment/create/', CreatePaymentInvoice.as_view(), name='create-payment')
+    path('payment/create/', CreatePayment.as_view(), name='create-payment'),
+    path('payment/<str:payment_uid>/bkash/callback/', BKashCallbackView.as_view(), name='bkash_callback'),
+    
     
     # path('payment/bkash/callback/', BkashExecutePaymentView.as_view(), name='bkash-callback'),
     

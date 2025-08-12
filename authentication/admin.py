@@ -17,7 +17,7 @@ class MerchantAdmin(admin.ModelAdmin):
 
 @admin.register(UserBrand)
 class UserBrandAdmin(admin.ModelAdmin):
-    list_display = ('id', 'brand_name', 'user', 'domain_name', 'status', 'fees_type', 'fees')
+    list_display = ('brand_key', 'brand_name', 'user', 'domain_name', 'status', 'fees_type', 'fees')
     list_filter = ('status', 'fees_type')
     search_fields = ('brand_name', 'user__username', 'domain_name')
 

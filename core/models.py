@@ -8,6 +8,8 @@ import string
 
 
 # ============================================Invoice/Cash In Start=======================================
+
+
 class Invoice(models.Model):
     STATUS = (
         ('active', 'Active'),
@@ -16,12 +18,18 @@ class Invoice(models.Model):
     PAYMENT_STATUS = (
         ('pending', 'Pending'),
         ('unpaid', 'Unpaid'),
-        ('paid', 'Paid')
+        ('paid', 'Paid'),
+        ('failed', 'Failed'),
+        ('cancelled', 'Cancelled'),
     )
     user = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, related_name='invoice', null=True)
-    payment_uid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
-    bkash_payment_id = models.CharField(blank=True, null=True)
     brand_id = models.ForeignKey(UserBrand, on_delete=models.SET_NULL, related_name='invoice', null=True)
+    
+    payment_uid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    data = models.CharField(max_length=500, blank=True, null=True)
+    bkash_payment_id = models.CharField(blank=True, null=True)
+    
+    customer_order_id = models.CharField(max_length=100, blank=True, null=True)
     customer_name = models.CharField(max_length=100)
     customer_number = models.CharField(max_length=14)
     customer_amount = models.DecimalField(max_digits=6, decimal_places=2)
@@ -29,10 +37,14 @@ class Invoice(models.Model):
     customer_address = models.CharField(blank=True, null=True)
     customer_description = models.TextField(blank=True, null=True)
     method = models.CharField(max_length=50, blank=True, null=True)
+    
+    
     status = models.CharField(max_length=15, choices=STATUS, default='active')
     pay_status = models.CharField(max_length=15, choices=PAYMENT_STATUS, default='pending')
+    
     transaction_id = models.CharField(blank=True, null=True)
     invoice_trxn = models.CharField(blank=True, null=True)
+    
     extras = models.TextField(blank=True, null=True)
     
     created_at = models.DateTimeField(auto_now_add=True)

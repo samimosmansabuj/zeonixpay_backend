@@ -88,6 +88,32 @@ class Merchant(models.Model):
     
     def __str__(self):
         return f'API Crerendtial for {self.user.username}'
+
+class Merchant(models.Model):
+    user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='merchants')
+    api_key = models.CharField(max_length=128, unique=True, blank=True, null=True)
+    secret_key = models.CharField(max_length=128, blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def set_secret(self, raw: str):
+        self.secret_key = make_password(raw)
+
+    def check_secret(self, raw: str) -> bool:
+        return check_password(raw, self.secret_key)
+
+    def save(self, *args, **kwargs):
+        if not self.api_key:
+            self.api_key = secrets.token_urlsafe(32)
+
+        if not self.secret_key:
+            raw_secret = secrets.token_urlsafe(32)
+            self.set_secret(raw_secret)
+
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f'API credential for {self.user.username}'
     
 
     
@@ -105,6 +131,7 @@ class UserBrand(models.Model):
     status = models.CharField(max_length=20, choices=(('Active', 'Active'), ('Inactive', 'Inactive')), default='Active')
     fees_type = models.CharField(max_length=10, choices=(('Flat', 'Flat'), ('Parcentage', 'Parcentage')), default='Parcentage')
     fees = models.DecimalField(max_digits=4, decimal_places=2, default=5)
+    is_active = models.BooleanField(default=True)
     
     def __str__(self):
         return self.brand_name
