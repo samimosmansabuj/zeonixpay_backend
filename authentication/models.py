@@ -58,10 +58,8 @@ class Merchant(models.Model):
     merchant_id = models.CharField(default=uuid.uuid4, editable=False, unique=True)
     
     brand_name = models.CharField(max_length=50)
-    mobile_number = models.CharField(max_length=14)
     whatsapp_number = models.CharField(max_length=14, blank=True, null=True)
-    email = models.EmailField(max_length=200, blank=True, null=True)
-    domain_name = models.URLField(max_length=200)
+    domain_name = models.URLField(max_length=200, blank=True, null=True)
     brand_logo = models.ImageField(upload_to='brand-logo', blank=True, null=True)
     status = models.CharField(max_length=20, choices=(('Active', 'Active'), ('Inactive', 'Inactive')), default='Active')
     fees_type = models.CharField(max_length=10, choices=(('Flat', 'Flat'), ('Parcentage', 'Parcentage')), default='Parcentage')
@@ -72,7 +70,7 @@ class Merchant(models.Model):
         unique = False
         while not unique:
             merchant_id = ''.join(random.choices(string.digits, k=6))
-            if not Merchant.objects.filter(order_id=merchant_id).exists():
+            if not Merchant.objects.filter(merchant_id=merchant_id).exists():
                 unique = True
                 return merchant_id
     

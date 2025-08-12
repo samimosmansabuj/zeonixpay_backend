@@ -2,6 +2,7 @@ from django.db import models
 from authentication.models import CustomUser, Merchant, APIKey, MerchantWallet
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
+from django.core.exceptions import ValidationError
 import uuid
 import random
 import string
@@ -46,13 +47,38 @@ class Invoice(models.Model):
     
     created_at = models.DateTimeField(auto_now_add=True)
     
+    ALLOWED_WHEN_PAID = frozenset(('customer_name', 'customer_number', 'customer_address'))
+    
     def generate_invoice_trxn(self):
         """Generate a unique transaction ID in the format: F37LIY561560"""
         prefix = ''.join(random.choices(string.ascii_uppercase, k=3))  # 3 random letters (e.g., F37)
         suffix = ''.join(random.choices(string.digits, k=6))  # 6 random digits (e.g., 561560)
         return prefix + suffix
     
+    def edit_restricted_method(self):
+        if not self.pk:
+            return
+
+        original = Invoice.objects.only('pay_status').filter(pk=self.pk).first()
+        if not original:
+            return
+
+        if original.pay_status == 'paid':
+            changed = set()
+            current = Invoice.objects.get(pk=self.pk)
+            for f in self._meta.concrete_fields:
+                name = f.name
+                if name in ('id', 'created_at'):
+                    continue
+                if getattr(current, name) != getattr(self, name):
+                    changed.add(name)
+
+            if changed - self.ALLOWED_WHEN_PAID:
+                raise ValidationError("This invoice is already paid and cannot be edited.")
+    
     def save(self, *args, **kwargs):
+        self.edit_restricted_method()
+        
         if not self.invoice_trxn:
             self.invoice_trxn = self.generate_invoice_trxn()
         

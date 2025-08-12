@@ -1,9 +1,9 @@
 from django.urls import path, include
-from .views import MerchantRegisterView, AdminOrStaffRegisterView, MerchantLoginView, AdminLoginView, UserProfileView, UserBrandView, UserPaymentMethodView, CustomTokenRefreshView, CustomTokenVerifyView, CustomLogOutView
+from .views import *
 from rest_framework.routers import DefaultRouter
 
 router = DefaultRouter()
-router.register(r'brands', UserBrandView, basename='user-brands')
+# router.register(r'brands', UserBrandView, basename='user-brands')
 router.register(r'payment-methods', UserPaymentMethodView, basename='user-payment-method')
 
 
@@ -23,8 +23,9 @@ urlpatterns = [
     
     
     # User Profile URL
-    path('merchant/profile/', UserProfileView.as_view(), name='user-profile'),
-    path('merchant/<str:pid>/', include(router.urls)),
+    path('user/profile/', UserProfileView.as_view(), name='user-profile'),
+    path('user/profile/merchant/', UserMerchantProfileView.as_view(), name='user-profile-merchant'),
+    path('u/<str:pid>/', include(router.urls)),
     
     # # User Payment Method URLs
     # path('payment-methods/', UserPaymentMethodView.as_view(), name='user-payment-method-list-create'),

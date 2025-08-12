@@ -122,7 +122,8 @@ class BKashClient:
             "merchantInvoiceNumber": merchant_invoice_number,
         }
         if payer_reference:
-            payload["payerReference"] = str(payer_reference)
+            payload["payerReference"] = "TokenizedCheckout"
+            # payload["payerReference"] = "01929918378"
         if agreement_id:
             payload["agreementID"] = agreement_id
 
@@ -168,21 +169,21 @@ class BKashClient:
 
 # ===============================================================================================
 class BKashCreatePaymentView(views.APIView):
-    def _create_and_maybe_redirect(self, request, payment_uid: str):
-        if not payment_uid:
-            raise ValidationError({"payment_uid": "This field is required."})
+    def _create_and_maybe_redirect(self, request, invoice_payment_id: str):
+        if not invoice_payment_id:
+            raise ValidationError({"invoice_payment_id": "This field is required."})
         try:
-            invoice = Invoice.objects.get(payment_uid=payment_uid)
+            invoice = Invoice.objects.get(invoice_payment_id=invoice_payment_id)
         except Invoice.DoesNotExist:
             raise NotFound("Invoice not found.")
 
         client = BKashClient()
-        callback_url = f"{BKASH_CALLBACK_BASE_URL}{reverse('bkash_callback', kwargs={'payment_uid': str(payment_uid)})}"
+        callback_url = f"{BKASH_CALLBACK_BASE_URL}{reverse('bkash_callback', kwargs={'invoice_payment_id': str(invoice_payment_id)})}"
         try:
             resp = client.create_payment(
                 amount=invoice.customer_amount,
                 intent="sale",
-                merchant_invoice_number=str(invoice.payment_uid),
+                merchant_invoice_number=str(invoice.invoice_payment_id),
                 payer_reference=str(invoice.invoice_trxn),
                 mode="0011",
                 callback_url=callback_url
@@ -194,9 +195,9 @@ class BKashCreatePaymentView(views.APIView):
         bkash_redirect_url = resp.get("bkashURL") or resp.get("bkashUrl") or resp.get("redirectURL")
 
         if payment_id:
-            invoice.bkash_payment_id = payment_id
+            invoice.method_payment_id = payment_id
             invoice.pay_status = "pending"
-            invoice.save(update_fields=["bkash_payment_id", "pay_status"])
+            invoice.save(update_fields=["method_payment_id", "pay_status"])
 
         if request.query_params.get("redirect") in ("1", "true", "yes"):
             if bkash_redirect_url:
@@ -211,21 +212,20 @@ class BKashCreatePaymentView(views.APIView):
         }, status=200)
     
     def get(self, request, *args, **kwargs):
-        return self._create_and_maybe_redirect(request, kwargs.get("payment_uid"))
+        return self._create_and_maybe_redirect(request, kwargs.get("invoice_payment_id"))
     
     # def post(self, request, *args, **kwargs):
-    #     return self._create_and_maybe_redirect(request, kwargs.get("payment_uid") or request.data.get("payment_uid"))
+    #     return self._create_and_maybe_redirect(request, kwargs.get("invoice_payment_id") or request.data.get("invoice_payment_id"))
 
 
 class BKashCallbackView(views.APIView):
     def decrypt_data(self, data_json):
-        print(data_json['key'])
         encrypt_decrypt = DataEncryptDecrypt(data_json['key'])
         decrypt_data_json = encrypt_decrypt.decrypt_data(data_json['code'])
         return decrypt_data_json
     
     def get(self, request, *args, **kwargs):
-        payment_uid = kwargs.get('payment_uid')
+        invoice_payment_id = kwargs.get('invoice_payment_id')
         payment_id = request.GET.get("paymentID")
         status = request.GET.get("status")
         # signature = request.GET.get("signature")
@@ -238,9 +238,12 @@ class BKashCallbackView(views.APIView):
             response = client.execute_payment(payment_id=payment_id)
         except BKashError as e:
             return Response({"status": False, "message": str(e)}, status=502)
-
-        invoice = get_object_or_404(Invoice, bkash_payment_id=payment_id, payment_uid=payment_uid)
-        client_callback_url = self.decrypt_data(json.loads(invoice.data))
+        
+        invoice = get_object_or_404(Invoice, method_payment_id=payment_id, invoice_payment_id=invoice_payment_id)
+        if type(invoice.data) is str:
+            client_callback_url = self.decrypt_data(json.loads(invoice.data))
+        else:
+            client_callback_url = self.decrypt_data(invoice.data)
         
 
         # Success: Payment completed successfully
@@ -250,7 +253,8 @@ class BKashCallbackView(views.APIView):
             return Response({
                 "status": True,
                 "message": "Payment has been successfully completed.",
-                "data": response
+                "Execute API Response": response,
+                'client_callback_url': client_callback_url['success_url']
             }, status=200)
         
         # Failure: Payment failed
@@ -260,19 +264,19 @@ class BKashCallbackView(views.APIView):
             return Response({
                 "status": False,
                 "message": "Payment failed. Please try again.",
-                "data": response
+                "Execute API Response": response,
+                'client_callback_url': client_callback_url['failed_url']
             }, status=400)
         
         # Cancel: Payment was canceled
         elif status == "cancel":
-            print(invoice.status)
             invoice.pay_status = "cancelled"
             invoice.save()
-            print(invoice.status)
             return Response({
                 "status": False,
                 "message": "Payment was canceled by the user.",
-                "data": response
+                "Execute API Response": response,
+                'client_callback_url': client_callback_url['cancel_url']
             }, status=400)
         
         # Unknown status: In case status is something unexpected
@@ -280,7 +284,7 @@ class BKashCallbackView(views.APIView):
             return Response({
                 "status": False,
                 "message": "Unknown status received. Please contact support.",
-                "data": response
+                "Execute API Response": response
             }, status=400)
 
 

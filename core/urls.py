@@ -8,14 +8,15 @@ router.register(r'invoice', InvoiceViewSet, basename='invoice')
 
 
 urlpatterns = [
-    path('<pid>/', include(router.urls)),
+    path('u/<pid>/', include(router.urls)),
     
-    path('invoice/<str:payment_uid>/get-payment/', GetOnlinePayment.as_view(), name='get-payment'),
-    path('invoice/<str:payment_uid>/get-payment/bkash/', BKashCreatePaymentView.as_view(), name='get-payment-bkash'),
+    #API For Payment m2m=================/Not Authentication Needed/===========
+    path('invoice/<str:invoice_payment_id>/get-payment/', GetOnlinePayment.as_view(), name='get-payment'),
+    path('invoice/<str:invoice_payment_id>/get-payment/bkash/', BKashCreatePaymentView.as_view(), name='get-payment-bkash'),
     
-    
+    #API For Payment m2m=================/API key & Secret Key Verify/===========
     path('payment/create/', CreatePayment.as_view(), name='create-payment'),
-    path('payment/<str:payment_uid>/bkash/callback/', BKashCallbackView.as_view(), name='bkash_callback'),
+    path('payment/<str:invoice_payment_id>/bkash/callback/', BKashCallbackView.as_view(), name='bkash_callback'),
     
     
     # path('payment/bkash/callback/', BkashExecutePaymentView.as_view(), name='bkash-callback'),

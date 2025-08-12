@@ -3,12 +3,11 @@ from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework.views import APIView
 from rest_framework import serializers, viewsets
-from .models import CustomUser, MerchantWallet
+from .models import CustomUser
 from rest_framework.generics import CreateAPIView
 from django.contrib.auth import authenticate
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.exceptions import PermissionDenied, ValidationError, NotFound
+from rest_framework.exceptions import ValidationError, NotFound
 from rest_framework.response import Response
 from .permissions import IsOwnerByUser
 
