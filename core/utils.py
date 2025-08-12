@@ -5,13 +5,17 @@ from rest_framework.exceptions import ValidationError, NotFound
 from rest_framework.response import Response
 from rest_framework import status
 from cryptography.fernet import Fernet
-import uuid
 import json
+import cryptography
 import base64
 
 class DataEncryptDecrypt:
-    def __init__(self):
-        self.key = self.generate_key()
+    def __init__(self, key=None):
+        if key is None:
+            self.key = Fernet.generate_key()  # Generate only once
+            # Save the key to a secure place, e.g., a file, env variable, or database
+        else:
+            self.key = base64.b64decode(key).decode('utf-8')
         self.cipher_suite = Fernet(self.key)
     
     def generate_key(self):
@@ -20,12 +24,18 @@ class DataEncryptDecrypt:
     def encrypt_data(self, json_data):
         json_string = json.dumps(json_data)
         encrypted_data = self.cipher_suite.encrypt(json_string.encode('utf-8'))
-        return encrypted_data
+        encrypt_data_json = {
+            "key": base64.b64encode(self.key).decode('utf-8'),
+            "code": base64.b64encode(encrypted_data).decode('utf-8')
+        }
+        return encrypt_data_json
     
     def decrypt_data(self, encrypted_data):
+        encrypted_data = base64.b64decode(encrypted_data).decode('utf-8')
         decrypted_data = self.cipher_suite.decrypt(encrypted_data)
         json_data = json.loads(decrypted_data.decode('utf-8'))
         return json_data
+
 
 
 class CustomPaymentSectionViewsets(viewsets.ModelViewSet):
@@ -60,14 +70,15 @@ class CustomPaymentSectionViewsets(viewsets.ModelViewSet):
     #-------------Created-------------------------------
     def json_encrypted(self, post_data):
         url_json = {
-            "success_url": post_data.get("success_url"),
-            "cancel_url": post_data.get("cancel_url"),
-            "failed_url": post_data.get("failed_url"),
+            "success_url": post_data.get("success_url", ""),
+            "cancel_url": post_data.get("cancel_url", ""),
+            "failed_url": post_data.get("failed_url", ""),
         }
         object = DataEncryptDecrypt()
-        encrypted_data = object.encrypt_data(url_json)
-        post_data['data'] = encrypted_data
+        encrypt_data_json = object.encrypt_data(url_json)
+        post_data['data'] = json.dumps(encrypt_data_json)
         return post_data
+    
     
     def create(self, request, *args, **kwargs):
         try:

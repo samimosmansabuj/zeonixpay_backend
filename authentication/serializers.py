@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import CustomUser, UserRole, UserId, UserWallet, UserBrand, UserPaymentMethod
+from .models import CustomUser, UserRole, UserId, UserPaymentMethod, Merchant, MerchantWallet
 from .utils import CustomLoginSerializer
 from django.contrib.auth.hashers import make_password
 
@@ -73,7 +73,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
 
 class UserWalletSerializer(serializers.ModelSerializer):
     class Meta:
-        model = UserWallet
+        model = MerchantWallet
         fields = '__all__'
 
 
@@ -86,7 +86,7 @@ class UserIdSerializer(serializers.ModelSerializer):
 class UserBrandSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(queryset=CustomUser.objects.all(), required=False)
     class Meta:
-        model = UserBrand
+        model = Merchant
         fields = '__all__'
 
 

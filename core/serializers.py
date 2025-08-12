@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import Invoice, PaymentTransfer, WithdrawRequest, WalletTransaction
-from authentication.models import CustomUser, UserBrand
+from authentication.models import CustomUser, MerchantWallet
 
 
 class InvoiceSerializer(serializers.ModelSerializer):

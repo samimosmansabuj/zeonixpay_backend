@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.exceptions import PermissionDenied
-from .models import CustomUser, UserBrand, UserPaymentMethod, UserWallet, UserId, UserRole
+from .models import CustomUser, UserPaymentMethod, UserId, UserRole, Merchant, MerchantWallet
 from .serializers import CustomUserSerializer, RegistrationSerializer, MerchantLoginSerializer, UserBrandSerializer, UserPaymentMethodSerializer, AdminLoginSerializer
 from .utils import CustomTokenObtainPairView, CustomUserCreateAPIView, CustomMerchantUserViewsets
 from .permissions import AdminCreatePermission
@@ -146,10 +146,10 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
 
 # User Brand Views (for merchants)
 class UserBrandView(CustomMerchantUserViewsets):
-    queryset = UserBrand.objects.none
+    queryset = Merchant.objects.none
     serializer_class = UserBrandSerializer
     
-    model = UserBrand
+    model = Merchant
     create_success_message = "Brand Created!"
     update_success_message = "Brand Updated!"
     delete_success_message = "Brand Deleted!"
