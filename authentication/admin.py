@@ -164,8 +164,6 @@ class MerchantAdmin(admin.ModelAdmin):
                     "brand_name",
                     "brand_logo",
                     "domain_name",
-                    "email",
-                    "mobile_number",
                     "whatsapp_number",
                 )
             },

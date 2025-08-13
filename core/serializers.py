@@ -14,6 +14,7 @@ class CreatePaymentSerializer(serializers.ModelSerializer):
         model = Invoice
         fields = '__all__'
 
+
 class PaymentTransferSerializer(serializers.ModelSerializer):
     class Meta:
         model = PaymentTransfer

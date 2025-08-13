@@ -1,5 +1,5 @@
 from django.db import models
-from authentication.models import CustomUser, Merchant, APIKey, MerchantWallet
+from authentication.models import CustomUser, Merchant, APIKey, MerchantWallet, UserPaymentMethod
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.core.exceptions import ValidationError
@@ -23,7 +23,7 @@ class Invoice(models.Model):
     )
     merchant = models.ForeignKey(Merchant, on_delete=models.SET_NULL, related_name='invoices', null=True)
     
-    invoice_payment_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    invoice_payment_id = models.CharField(max_length=50, editable=False, unique=True)
     data = models.JSONField(blank=True, null=True)
     method_payment_id = models.CharField(blank=True, null=True)
     
@@ -79,10 +79,13 @@ class Invoice(models.Model):
     def save(self, *args, **kwargs):
         self.edit_restricted_method()
         
+        if not self.invoice_payment_id:
+            self.invoice_payment_id = uuid.uuid4().hex
+        
         if not self.invoice_trxn:
             self.invoice_trxn = self.generate_invoice_trxn()
         
-        if self.status == 'Active' and self.pay_status == 'Paid' and self.transaction_id:
+        if self.status.lower() == 'active' and self.pay_status.lower() == 'paid' and self.transaction_id:
             WalletTransaction.objects.create(
                 wallet = self.merchant.merchant_wallet,
                 merchant = self.merchant,
@@ -114,27 +117,52 @@ class PaymentTransfer(models.Model):
         ('pending', 'Pending'), ('success', 'Success'), ('rejected', 'Rejected')
     )
     merchant = models.ForeignKey(Merchant, on_delete=models.SET_NULL, related_name='payment_transfer', null=True)
-    transfer_id = models.UUIDField(default=uuid.uuid4(), editable=False, unique=True)
+    trx_id = models.CharField(max_length=50, null=True, blank=True)
+    trx_uuid = models.CharField(max_length=50, editable=False, unique=True)
     receiver_name = models.CharField(max_length=100)
     receiver_number = models.CharField(max_length=14)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
-    charge = models.DecimalField(max_digits=12, decimal_places=2)
-    net_amount = models.DecimalField(max_digits=12, decimal_places=2)
     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD)
     payment_details = models.JSONField()
     status = models.CharField(choices=STATUS, default='pending', max_length=10)
     created_at = models.DateTimeField(auto_now_add=True)
     
+    def edit_restricted_method(self):
+        if not self.pk:
+            return
+
+        original = PaymentTransfer.objects.only('status').filter(pk=self.pk).first()
+        if not original:
+            return
+
+        if original.status.lower() in ['success', 'rejected']:
+            raise ValidationError(f"This Payment Payout is {original.status}. Can't Update!")
+    
+    def verify_withdraw_amount(self):
+        wallet_balance = self.merchant.merchant_wallet.balance
+        return wallet_balance >= self.amount
+    
     def save(self, *args, **kwargs):
-        if self.status == 'Success' and self.transfer_id:
+        self.edit_restricted_method()
+        
+        if self.verify_withdraw_amount() is False:
+            raise ValidationError("Payout amount less then your Wallet balance.")
+        
+        if not self.trx_uuid:
+            self.trx_uuid = uuid.uuid4().hex
+        
+        if self.trx_id and self.status == 'pending':
+            self.status = 'success'
+        
+        if self.status.lower() == 'success' and self.trx_id:
             WalletTransaction.objects.create(
                 wallet = self.merchant.merchant_wallet,
                 merchant = self.merchant,
                 service = self,
-                amount = self.net_amount,
+                amount = self.amount,
                 method = self.payment_method,
                 status='success',
-                trx_id=self.transaction_id,
+                trx_id=self.trx_id,
                 tran_type='debit'
             )
         return super().save(*args, **kwargs)
@@ -148,26 +176,53 @@ class WithdrawRequest(models.Model):
         ('pending', 'Pending'), ('success', 'Success'), ('rejected', 'Rejected')
     )
     merchant = models.ForeignKey(Merchant, on_delete=models.SET_NULL, related_name='withdrawrequest', blank=True, null=True)
+    payment_method = models.ForeignKey(UserPaymentMethod, on_delete=models.SET_NULL, related_name='withdrawal', blank=True, null=True)
     
     amount = models.DecimalField(max_digits=12, decimal_places=2)
-    charge = models.DecimalField(max_digits=12, decimal_places=2)
-    net_amount = models.DecimalField(max_digits=12, decimal_places=2)
     status = models.CharField(choices=STATUS, default='pending', max_length=10)
     message = models.TextField(blank=True, null=True)
-    trx_id = models.CharField(blank=True, null=True)
+    trx_id = models.CharField(max_length=50, null=True, blank=True)
+    trx_uuid = models.CharField(max_length=50, editable=False, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    def edit_restricted_method(self):
+        if not self.pk:
+            return
+
+        original = WithdrawRequest.objects.only('status').filter(pk=self.pk).first()
+        if not original:
+            return
+
+        if original.status.lower() in ['success', 'rejected']:
+            raise ValidationError(f"This Withdrawal Request is {original.status}. Can't Update!")
+    
+    def verify_withdraw_amount(self):
+        wallet_balance = self.merchant.merchant_wallet.balance
+        return wallet_balance >= self.amount
+    
     def save(self, *args, **kwargs):
-        if self.status == 'Success' and self.trx_id:
+        self.edit_restricted_method()
+        
+        if self.verify_withdraw_amount() is False:
+            raise ValidationError("Withdraw amount less then your Wallet balance.")
+        
+        if not self.trx_uuid:
+            self.trx_uuid = uuid.uuid4().hex
+                
+        
+        if self.trx_id and self.status == 'pending':
+            self.status = 'success'
+
+        if self.status.lower() == 'success' and self.trx_id:
             WalletTransaction.objects.create(
                 wallet = self.merchant.merchant_wallet,
                 merchant = self.merchant,
                 service = self,
-                amount = self.net_amount,
-                method = self.method,
+                amount = self.amount,
+                method = self.payment_method.method_type,
                 status='success',
-                trx_id=self.transaction_id,
+                trx_id=self.trx_id,
                 tran_type='debit'
             )
         return super().save(*args, **kwargs)
@@ -186,18 +241,37 @@ class WalletTransaction(models.Model):
     service = GenericForeignKey('content_type', 'object_id')
     
     amount = models.DecimalField(max_digits=12, decimal_places=2)
-    method = models.CharField(max_length=10, blank=True, null=True)
+    method = models.CharField(max_length=50, blank=True, null=True)
     status = models.CharField(choices=[('pending', 'Pending'), ('success', 'Success'), ('failed', 'Failed')], max_length=10)
     created_at = models.DateTimeField(auto_now_add=True)
-    trx_id = models.CharField(max_length=100, null=True, blank=True)
+    trx_id = models.CharField(max_length=50, null=True, blank=True)
+    trx_uuid = models.CharField(max_length=50, editable=False, unique=True)
     tran_type = models.CharField(max_length=20, choices=(('debit', 'Debit'), ('credit', 'Credit')))
     
+    
+    def edit_restricted_method(self):
+        if not self.pk:
+            return
+
+        original = WalletTransaction.objects.only('status').filter(pk=self.pk).first()
+        if not original:
+            return
+
+        if original.status.lower() in ['success', 'failed']:
+            raise ValidationError(f"This Wallet Transaction is {original.status}. Can't Update!")
+    
     def save(self, *args, **kwargs):
+        self.edit_restricted_method()
+        
+        if not self.trx_uuid:
+            self.trx_uuid = uuid.uuid4().hex
+        
         wallet = self.wallet
-        if self.status == 'Success':
-            if self.tran_type == 'Debit':
+        if self.status.lower() == 'success':
+            if self.tran_type.lower() == 'debit':
                 wallet.balance -= self.amount
-            elif self.tran_type == 'Credit':
+                wallet.total_withdraw += self.amount
+            elif self.tran_type.lower() == 'credit':
                 wallet.balance += self.amount
             wallet.save()
         

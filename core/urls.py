@@ -1,22 +1,44 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import InvoiceViewSet, GetOnlinePayment, CreatePayment
+from .views import InvoiceViewSet, GetOnlinePayment, CreatePayment, WalletOverView, WalletTransactionViewSet, WithdrawRequestViewSet, PaymentPayOutView
 from .payment.bkash import BKashCreatePaymentView, BKashCallbackView
 
 router = DefaultRouter()
 router.register(r'invoice', InvoiceViewSet, basename='invoice')
 
 
+dashboard_router = DefaultRouter()
+dashboard_router.register(r'wallet-transaction', WalletTransactionViewSet, basename='wallet-transaction')
+dashboard_router.register(r'withdraw-request', WithdrawRequestViewSet, basename='withdraw-request')
+
+
 urlpatterns = [
+    # ===============================================================================================
+    # ====================Merchant & Admin Dashboard API URL Start==================================
+    # ===============================================================================================
+    path('u/wallet/wallet-overview/', WalletOverView, name='wallet-overview'),
+    path('u/wallet/', include(dashboard_router.urls)),
+
+
+    # ===============================================================================================
+    # ====================Merchant & Admin Dashboard API URL End===================================
+    # ===============================================================================================
+    
+    
     path('u/<pid>/', include(router.urls)),
     
     #API For Payment m2m=================/Not Authentication Needed/===========
     path('invoice/<str:invoice_payment_id>/get-payment/', GetOnlinePayment.as_view(), name='get-payment'),
     path('invoice/<str:invoice_payment_id>/get-payment/bkash/', BKashCreatePaymentView.as_view(), name='get-payment-bkash'),
+    path('payment/<str:invoice_payment_id>/bkash/callback/', BKashCallbackView.as_view(), name='bkash_callback'),
     
     #API For Payment m2m=================/API key & Secret Key Verify/===========
     path('payment/create/', CreatePayment.as_view(), name='create-payment'),
-    path('payment/<str:invoice_payment_id>/bkash/callback/', BKashCallbackView.as_view(), name='bkash_callback'),
+    path('payment/payout/', PaymentPayOutView.as_view(), name='payment-payout'),
+    
+    
+    
+    # path('bkash-grant-token/', bkash_grant_token, name='bkash-grant-token')
     
     
     # path('payment/bkash/callback/', BkashExecutePaymentView.as_view(), name='bkash-callback'),
