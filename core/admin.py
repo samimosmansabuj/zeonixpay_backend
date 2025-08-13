@@ -47,38 +47,37 @@ class InvoiceAdmin(admin.ModelAdmin):
 @admin.register(PaymentTransfer)
 class PaymentTransferAdmin(admin.ModelAdmin):
     list_display = (
-        "transfer_id",
+        "trx_uuid",
+        "trx_id",
         "merchant",
         "receiver_name",
         "receiver_number",
         "amount",
-        "charge",
-        "net_amount",
         "payment_method",
         "status",
         "created_at",
     )
     list_filter = ("payment_method", "status", "created_at")
     search_fields = (
-        "transfer_id",
+        "trx_uuid",
+        "trx_id",
         "merchant__brand_name",
         "merchant__user__username",
         "receiver_name",
         "receiver_number",
     )
     autocomplete_fields = ("merchant",)
-    readonly_fields = ("transfer_id", "created_at")
+    readonly_fields = ("trx_uuid", "created_at")
 
 
 # -------------------- Withdraw Request --------------------
 @admin.register(WithdrawRequest)
 class WithdrawRequestAdmin(admin.ModelAdmin):
     list_display = (
-        "id",
+        "trx_uuid",
+        "trx_id",
         "merchant",
         "amount",
-        "charge",
-        "net_amount",
         "status",
         "trx_id",
         "created_at",
@@ -88,6 +87,7 @@ class WithdrawRequestAdmin(admin.ModelAdmin):
     search_fields = (
         "merchant__brand_name",
         "merchant__user__username",
+        "trx_uuid",
         "trx_id",
     )
     autocomplete_fields = ("merchant",)
@@ -98,19 +98,20 @@ class WithdrawRequestAdmin(admin.ModelAdmin):
 @admin.register(WalletTransaction)
 class WalletTransactionAdmin(admin.ModelAdmin):
     list_display = (
-        "id",
+        "trx_uuid",
+        "trx_id",
         "merchant",
         "wallet",
         "amount",
         "method",
         "status",
         "tran_type",
-        "trx_id",
         "created_at",
         "service_repr",
     )
     list_filter = ("status", "tran_type", "created_at", "method")
     search_fields = (
+        "trx_uuid",
         "trx_id",
         "merchant__brand_name",
         "merchant__user__username",
@@ -118,6 +119,7 @@ class WalletTransactionAdmin(admin.ModelAdmin):
     )
     autocomplete_fields = ("merchant", "wallet")
     readonly_fields = (
+        "trx_uuid",
         "created_at",
         "content_type",
         "object_id",
@@ -130,6 +132,7 @@ class WalletTransactionAdmin(admin.ModelAdmin):
         "method",
         "status",
         "tran_type",
+        "trx_uuid",
         "trx_id",
         "created_at",
         # Show Generic FK in a safe/read-only way

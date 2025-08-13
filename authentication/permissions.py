@@ -15,3 +15,10 @@ class IsOwnerByUser(BasePermission):
         pid = view.kwargs.get('pid')
         return request.user.is_authenticated and str(request.user.pid) == str(pid)
 
+class MerchantCreatePermission(BasePermission):
+    def has_permission(self, request, view):
+        if request.method in SAFE_METHODS:
+            return True
+        user = request.user
+        return user.is_authenticated and user.role.name == 'Merchant'
+

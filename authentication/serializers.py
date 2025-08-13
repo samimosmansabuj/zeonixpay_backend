@@ -148,10 +148,10 @@ class MerchantSerializer(serializers.ModelSerializer):
         model = Merchant
         fields = '__all__'
 
-class UserWalletSerializer(serializers.ModelSerializer):
+class MerchantWalletSerializer(serializers.ModelSerializer):
     class Meta:
         model = MerchantWallet
-        fields = '__all__'
+        fields = ['balance', 'withdraw_processing', 'total_withdraw']
 
 class UserIdSerializer(serializers.ModelSerializer):
     class Meta:

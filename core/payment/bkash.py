@@ -10,7 +10,7 @@ from core.models import Invoice
 from rest_framework.exceptions import NotFound, ValidationError, AuthenticationFailed
 from core.utils import DataEncryptDecrypt
 import json
-import base64
+from django.shortcuts import HttpResponse
 
 
 load_dotenv()
@@ -105,9 +105,10 @@ class BKashClient:
 
     def _headers_auth(self):
         return {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
             "Authorization": self._authorization(),
-            "X-APP-Key": self.app_key,
-            "Content-Type": "application/json"
+            "X-App-Key": self.app_key
         }
 
     # ------- payment endpoints -------
@@ -122,8 +123,8 @@ class BKashClient:
             "merchantInvoiceNumber": merchant_invoice_number,
         }
         if payer_reference:
-            payload["payerReference"] = "TokenizedCheckout"
-            # payload["payerReference"] = "01929918378"
+            # payload["payerReference"] = "TokenizedCheckout"
+            payload["payerReference"] = "01929918378"
         if agreement_id:
             payload["agreementID"] = agreement_id
 
@@ -176,6 +177,21 @@ class BKashCreatePaymentView(views.APIView):
             invoice = Invoice.objects.get(invoice_payment_id=invoice_payment_id)
         except Invoice.DoesNotExist:
             raise NotFound("Invoice not found.")
+        
+        if invoice.pay_status.lower() == 'paid':
+            return Response(
+                {
+                    'status': False,
+                    'message': f"This invoice is already {invoice.pay_status} and cannot be edited."
+                }
+            )
+        elif invoice.pay_status.lower() in ['failed', 'cancelled']:
+            return Response(
+                {
+                    'status': False,
+                    'message': f"This invoice is already {invoice.pay_status} and cannot be edited."
+                }
+            )
 
         client = BKashClient()
         callback_url = f"{BKASH_CALLBACK_BASE_URL}{reverse('bkash_callback', kwargs={'invoice_payment_id': str(invoice_payment_id)})}"
@@ -249,6 +265,9 @@ class BKashCallbackView(views.APIView):
         # Success: Payment completed successfully
         if status == "success" and response.get("transactionStatus") == "Completed":
             invoice.pay_status = "paid"
+            invoice.transaction_id = response.get("trxID")
+            if not invoice.method:
+                invoice.method = 'bkash'
             invoice.save()
             return Response({
                 "status": True,
