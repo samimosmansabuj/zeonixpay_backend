@@ -2,9 +2,9 @@ from django.urls import path, include
 from .views import *
 from rest_framework.routers import DefaultRouter
 
-router = DefaultRouter()
+# router = DefaultRouter()
 # router.register(r'brands', UserBrandView, basename='user-brands')
-router.register(r'payment-methods', UserPaymentMethodView, basename='user-payment-method')
+# router.register(r'payment-methods', UserPaymentMethodView, basename='user-payment-method')
 
 
 urlpatterns = [
@@ -25,9 +25,6 @@ urlpatterns = [
     # User Profile URL
     path('user/profile/', UserProfileView.as_view(), name='user-profile'),
     path('user/profile/merchant/', UserMerchantProfileView.as_view(), name='user-profile-merchant'),
-    path('u/<str:pid>/', include(router.urls)),
-    
-    # # User Payment Method URLs
-    # path('payment-methods/', UserPaymentMethodView.as_view(), name='user-payment-method-list-create'),
+    path('profile/update/', UpdateUserMerchantAPIView.as_view(), name='user-merchant-profile-update')
 ]
 

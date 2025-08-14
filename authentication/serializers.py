@@ -166,3 +166,17 @@ class UserPaymentMethodSerializer(serializers.ModelSerializer):
 
 
 # ========================Registration/Account Create Serializer Start=============================
+
+
+
+
+class MerchantSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Merchant
+        fields = ['brand_name', 'whatsapp_number', 'domain_name', 'brand_logo', 'status', 'fees_type', 'fees', 'is_active']
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fields = ['first_name', 'phone_number', 'more_information', 'status', 'role']
+

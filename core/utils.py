@@ -1,6 +1,6 @@
 from rest_framework import viewsets
 from authentication.permissions import IsOwnerByUser
-from authentication.models import CustomUser
+from authentication.models import CustomUser, Merchant
 from rest_framework.exceptions import ValidationError, NotFound
 from rest_framework.response import Response
 from rest_framework import status
@@ -44,28 +44,44 @@ class CustomPaymentSectionViewsets(viewsets.ModelViewSet):
     create_success_message = "Created!"
     update_success_message = "Updated!"
     delete_success_message = "Deleted!"
+    delete_not_permission_message = f"Can't Delete!"
     not_found_message = "Object Not Found!"
+    create_permission_denied_message = "Only Merchant user can Create!"
     ordering_by = "-id"
     
     #----------User-----------------------------------
     def get_user(self):
-        pid = self.kwargs.get('pid')
-        try:
-            user = CustomUser.objects.get(pid=pid)
-        except CustomUser.DoesNotExist:
-            user = None
-        return user
+        return self.request.user
+    
+    def get_merchant(self):
+        user = self.get_user()
+        merchant = Merchant.objects.get(user=user) if Merchant.objects.filter(user=user).exists() else None
+        if merchant:
+            return merchant
+        else:
+            return None
     
     #-------------Object Queryset-----------------------
     def get_queryset(self):
-        merchant = self.get_user().merchant
+        merchant = self.get_merchant()
         if merchant:
             return self.model.objects.filter(merchant=merchant).order_by(self.ordering_by)
-        return self.model.objects.none()
+        else:
+            if self.get_user().role.name.lower() == 'admin':
+                return self.queryset
+            else:
+                return None
     
     
     #-------------Created-------------------------------
     def create(self, request, *args, **kwargs):
+        if not self.get_merchant():
+            return Response(
+                {
+                    'status': False,
+                    'message': self.create_permission_denied_message
+                }
+            )
         try:
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
@@ -94,18 +110,25 @@ class CustomPaymentSectionViewsets(viewsets.ModelViewSet):
             )
     
     def perform_create(self, serializer):
-        user = self.request.user
-        serializer.save(user=user)
+        serializer.save(merchant=self.get_merchant())
     
     #-------------------Queryset List-------------------
     def list(self, request, *args, **kwargs):
-        try:
-            response = super().list(request, *args, **kwargs).data
+        queryset = self.get_queryset()
+        if queryset is None:
             return Response(
                 {
                     'status': True,
-                    'count': len(response),
-                    'data': response
+                    'message': "Can't Get with this User!"
+                }
+            )
+        try:
+            response = self.get_serializer(queryset, many=True)
+            return Response(
+                {
+                    'status': True,
+                    'count': len(response.data),
+                    'data': response.data
                 }, status=status.HTTP_200_OK
             )
         except Exception as e:
@@ -127,13 +150,21 @@ class CustomPaymentSectionViewsets(viewsets.ModelViewSet):
             })
     
     def retrieve(self, request, *args, **kwargs):
-        instance = self.get_object()
-        return Response(
-            {
-                'status': True,
-                'data': self.get_serializer(instance).data
-            }, status=status.HTTP_200_OK
-        )
+        try:
+            instance = self.get_object()
+            return Response(
+                {
+                    'status': True,
+                    'data': self.get_serializer(instance).data
+                }, status=status.HTTP_200_OK
+            )
+        except NotFound as e:
+            return Response(
+                {
+                    'status': False,
+                    'message': str(e)
+                }
+            )
     
 
     def update(self, request, *args, **kwargs):
@@ -159,15 +190,45 @@ class CustomPaymentSectionViewsets(viewsets.ModelViewSet):
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
+        except NotFound as e:
+            return Response(
+                {
+                    'status': False,
+                    'error': str(e)
+                },
+                status=status.HTTP_404_NOT_FOUND
+            ) 
+        except Exception as e:
+            return Response(
+                {
+                    'status': False,
+                    'message': str(e),
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     def destroy(self, request, *args, **kwargs):
-        super().destroy(request, *args, **kwargs)
-        return Response(
-            {
-                'status': True,
-                'message': self.delete_success_message,
-            }, status=status.HTTP_200_OK
-        )
-
+        object = self.get_object()
+        message, response = self.destroy_response(object)
+        if response:
+            return response
+        else:
+            return Response(
+                {
+                    'status': False,
+                    'message': message,
+                }, status=status.HTTP_406_NOT_ACCEPTABLE
+            )
+    
+    def destroy_response(self, object):
+        if object.status.lower() == 'active':
+            object.status = 'delete'
+            object.save()
+            return True , Response(
+                {
+                    'status': True,
+                    'message': self.delete_success_message,
+                }, status=status.HTTP_200_OK
+            )
+        return f"This Invoice Can't Delete!", None
 
 

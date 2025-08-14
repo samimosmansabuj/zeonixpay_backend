@@ -4,11 +4,12 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.exceptions import PermissionDenied
 from .models import CustomUser, UserPaymentMethod, UserId, UserRole, Merchant, MerchantWallet
-from .serializers import CustomUserSerializer, RegistrationSerializer, MerchantLoginSerializer, UserPaymentMethodSerializer, AdminLoginSerializer, MerchantRegistrationSerializer, MerchantSerializer
+from .serializers import CustomUserSerializer, RegistrationSerializer, MerchantLoginSerializer, UserPaymentMethodSerializer, AdminLoginSerializer, MerchantRegistrationSerializer, MerchantSerializer, UserSerializer
 from .utils import CustomTokenObtainPairView, CustomUserCreateAPIView, CustomMerchantUserViewsets
 from .permissions import AdminCreatePermission
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.decorators import api_view, permission_classes
 
 
 # ========================Registration/Account Create Views Start===============================
@@ -183,27 +184,31 @@ class UserMerchantProfileView(generics.RetrieveUpdateAPIView):
                 }, status=status.HTTP_400_BAD_REQUEST
             )
 
-# User Payment Method Views
-class UserPaymentMethodView(CustomMerchantUserViewsets):
-    queryset = UserPaymentMethod.objects.none
-    serializer_class = UserPaymentMethodSerializer
+
+class UpdateUserMerchantAPIView(APIView):
+    permission_classes = [IsAuthenticated]
     
-    model = UserPaymentMethod
-    create_success_message = "Payment Method Created!"
-    update_success_message = "Payment Method Updated!"
-    delete_success_message = "Payment Method Deleted!"
-    not_found_message = "Payment Method Object Not Found!"
-    
-    def perform_create(self, serializer):
-        merchant = self.request.user.merchant
-        serializer.save(merchant=merchant)
-    
-    def get_queryset(self):
-        merchant = self.get_user().merchant
-        if merchant:
-            return self.model.objects.filter(merchant=merchant)
-        return self.model.objects.none()
-    
+    def put(self, request, *args, **kwargs):
+        user = request.user
+        user_serializer = UserSerializer(user, data=request.data.get('user', {}), partial=True)
+        
+        if user_serializer.is_valid():
+            user_serializer.save()
+        else:
+            return Response(user_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        if hasattr(user, 'merchant') and user.merchant:
+            merchant_serializer = MerchantSerializer(user.merchant, data=request.data.get('merchant', {}), partial=True)
+            if merchant_serializer.is_valid():
+                merchant_serializer.save()
+            else:
+                return Response(merchant_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response(
+            {
+                "status": True,
+                "message": "Updated successfully"
+            }, status=status.HTTP_200_OK
+        )
 
 
-    
