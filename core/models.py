@@ -12,7 +12,8 @@ import string
 class Invoice(models.Model):
     STATUS = (
         ('active', 'Active'),
-        ('deactive', 'Deactive')
+        ('deactive', 'Deactive'),
+        ('delete', 'Delete')
     )
     PAYMENT_STATUS = (
         ('pending', 'Pending'),
@@ -62,6 +63,9 @@ class Invoice(models.Model):
         original = Invoice.objects.only('pay_status').filter(pk=self.pk).first()
         if not original:
             return
+        
+        if original.status.lower() in ['deactive', 'delete']:
+            raise ValidationError(f"This Invoice is {original.status}. Can't Update!")
 
         if original.pay_status == 'paid':
             changed = set()
@@ -114,7 +118,7 @@ class PaymentTransfer(models.Model):
         ('bank', 'Bank'),
     )
     STATUS = (
-        ('pending', 'Pending'), ('success', 'Success'), ('rejected', 'Rejected')
+        ('pending', 'Pending'), ('success', 'Success'), ('rejected', 'Rejected'), ('delete', 'Delete')
     )
     merchant = models.ForeignKey(Merchant, on_delete=models.SET_NULL, related_name='payment_transfer', null=True)
     trx_id = models.CharField(max_length=50, null=True, blank=True)
@@ -127,6 +131,8 @@ class PaymentTransfer(models.Model):
     status = models.CharField(choices=STATUS, default='pending', max_length=10)
     created_at = models.DateTimeField(auto_now_add=True)
     
+    ALLOWED_WHEN_PAID = frozenset(('trx_id', 'status'))
+    
     def edit_restricted_method(self):
         if not self.pk:
             return
@@ -135,8 +141,20 @@ class PaymentTransfer(models.Model):
         if not original:
             return
 
-        if original.status.lower() in ['success', 'rejected']:
+        if original.status.lower() in ['success', 'rejected', 'delete']:
             raise ValidationError(f"This Payment Payout is {original.status}. Can't Update!")
+        
+        changed = set()
+        current = PaymentTransfer.objects.get(pk=self.pk)
+        for f in self._meta.concrete_fields:
+            name = f.name
+            if name in ('id', 'created_at'):
+                continue
+            if getattr(current, name) != getattr(self, name):
+                changed.add(name)
+
+        if changed - self.ALLOWED_WHEN_PAID:
+            raise ValidationError("Only Transaction & Status can update!")
     
     def verify_withdraw_amount(self):
         wallet_balance = self.merchant.merchant_wallet.balance
@@ -173,7 +191,7 @@ class PaymentTransfer(models.Model):
 # ======================================Withdraw Request/Cash Out Start=================================
 class WithdrawRequest(models.Model):
     STATUS = (
-        ('pending', 'Pending'), ('success', 'Success'), ('rejected', 'Rejected')
+        ('pending', 'Pending'), ('success', 'Success'), ('rejected', 'Rejected'), ('delete', 'Delete')
     )
     merchant = models.ForeignKey(Merchant, on_delete=models.SET_NULL, related_name='withdrawrequest', blank=True, null=True)
     payment_method = models.ForeignKey(UserPaymentMethod, on_delete=models.SET_NULL, related_name='withdrawal', blank=True, null=True)
@@ -194,7 +212,7 @@ class WithdrawRequest(models.Model):
         if not original:
             return
 
-        if original.status.lower() in ['success', 'rejected']:
+        if original.status.lower() in ['success', 'rejected', 'delete']:
             raise ValidationError(f"This Withdrawal Request is {original.status}. Can't Update!")
     
     def verify_withdraw_amount(self):
@@ -236,11 +254,17 @@ class WithdrawRequest(models.Model):
 class WalletTransaction(models.Model):
     wallet = models.ForeignKey(MerchantWallet, on_delete=models.SET_NULL, related_name='wallet_transaction', blank=True, null=True)
     merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE, related_name='wallet_transaction', blank=True, null=True)
+    ip_address = models.CharField(max_length=32, blank=True, null=True)
     content_type = models.ForeignKey(ContentType, on_delete=models.SET_NULL, blank=True, null=True)
     object_id = models.PositiveIntegerField(blank=True, null=True)
     service = GenericForeignKey('content_type', 'object_id')
     
     amount = models.DecimalField(max_digits=12, decimal_places=2)
+    fee = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    net_amount = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    previous_balance = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    current_balance = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    
     method = models.CharField(max_length=50, blank=True, null=True)
     status = models.CharField(choices=[('pending', 'Pending'), ('success', 'Success'), ('failed', 'Failed')], max_length=10)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -260,20 +284,40 @@ class WalletTransaction(models.Model):
         if original.status.lower() in ['success', 'failed']:
             raise ValidationError(f"This Wallet Transaction is {original.status}. Can't Update!")
     
+    def save_user_ip_address(self, request=None):
+        if request and not self.ip_address:
+            ip = request.META.get('HTTP_X_FORWARDED_FOR')
+            if ip:
+                ip = ip.split(',')[0]
+            else:
+                ip = request.META.get('REMOTE_ADDR', '')
+            self.ip_address = ip
+    
+    def fees_disbursement(self):
+        self.fee = self.amount * 10/100
+        self.net_amount = self.amount - self.fee
+    
     def save(self, *args, **kwargs):
         self.edit_restricted_method()
+        
+        self.save_user_ip_address(kwargs.pop('request', None))
         
         if not self.trx_uuid:
             self.trx_uuid = uuid.uuid4().hex
         
         wallet = self.wallet
+        self.fees_disbursement()
         if self.status.lower() == 'success':
+            self.previous_balance = wallet.balance
+            
             if self.tran_type.lower() == 'debit':
                 wallet.balance -= self.amount
                 wallet.total_withdraw += self.amount
             elif self.tran_type.lower() == 'credit':
                 wallet.balance += self.amount
             wallet.save()
+            
+            self.current_balance = wallet.balance
         
         return super().save(*args, **kwargs)
 

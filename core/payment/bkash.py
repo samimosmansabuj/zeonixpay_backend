@@ -11,6 +11,7 @@ from rest_framework.exceptions import NotFound, ValidationError, AuthenticationF
 from core.utils import DataEncryptDecrypt
 import json
 from django.shortcuts import HttpResponse
+from urllib.parse import urlencode
 
 
 load_dotenv()
@@ -228,10 +229,7 @@ class BKashCreatePaymentView(views.APIView):
         }, status=200)
     
     def get(self, request, *args, **kwargs):
-        return self._create_and_maybe_redirect(request, kwargs.get("invoice_payment_id"))
-    
-    # def post(self, request, *args, **kwargs):
-    #     return self._create_and_maybe_redirect(request, kwargs.get("invoice_payment_id") or request.data.get("invoice_payment_id"))
+        return self._create_and_maybe_redirect(request, request.GET.get("invoice_payment_id"))
 
 
 class BKashCallbackView(views.APIView):
@@ -269,12 +267,17 @@ class BKashCallbackView(views.APIView):
             if not invoice.method:
                 invoice.method = 'bkash'
             invoice.save()
-            return Response({
-                "status": True,
-                "message": "Payment has been successfully completed.",
-                "Execute API Response": response,
-                'client_callback_url': client_callback_url['success_url']
-            }, status=200)
+            
+            query_string = urlencode(response)
+            redirect_url = f"{client_callback_url['success_url']}?{query_string}"
+            return redirect(redirect_url)
+            
+            # return Response({
+            #     "status": True,
+            #     "message": "Payment has been successfully completed.",
+            #     "Execute API Response": response,
+            #     'client_callback_url': client_callback_url['success_url']
+            # }, status=200)
         
         # Failure: Payment failed
         elif status == "failure":
@@ -297,6 +300,9 @@ class BKashCallbackView(views.APIView):
                 "Execute API Response": response,
                 'client_callback_url': client_callback_url['cancel_url']
             }, status=400)
+        
+        
+        
         
         # Unknown status: In case status is something unexpected
         else:

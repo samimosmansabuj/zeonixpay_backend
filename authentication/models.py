@@ -146,8 +146,16 @@ class UserPaymentMethod(models.Model):
     method_type = models.CharField(max_length=20, choices=METHOD_TYPE)
     params = models.JSONField()
     status = models.CharField(max_length=10, choices=STATUS)
+    is_primary = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    def save(self, *args, **kwargs):
+        if self.is_primary and self.merchant:
+            UserPaymentMethod.objects.filter(
+                merchant=self.merchant
+            ).exclude(pk=self.pk).update(is_primary=False)
+        return super().save(*args, **kwargs)
     
     def __str__(self):
         return f"{self.method_type} Payment Method for {self.merchant.brand_name}"
