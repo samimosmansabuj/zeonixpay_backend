@@ -7,7 +7,12 @@ class AdminCreatePermission(BasePermission):
             return True
         else:
             user = request.user
-            return user.is_authenticated and user.role.name in ['Admin', 'Staff']
+            return user.is_authenticated and user.role.name in ['Admin']
+
+class AdminAllPermission(BasePermission):
+    def has_permission(self, request, view):
+        user = request.user
+        return user.is_authenticated and user.role.name in ['Admin']
 
 
 class IsOwnerByUser(BasePermission):

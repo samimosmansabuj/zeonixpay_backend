@@ -1,4 +1,3 @@
-# admin.py
 from django.contrib import admin
 from django.utils.html import format_html
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
@@ -11,6 +10,7 @@ from .models import (
     APIKey,
     MerchantWallet,
     UserPaymentMethod,
+    BasePaymentGateWay,
 )
 
 
@@ -220,3 +220,8 @@ class UserPaymentMethodAdmin(admin.ModelAdmin):
         return format_html("<pre style='white-space:pre-wrap;max-width:100%;'>{}</pre>", json.dumps(obj.params, indent=2))
 
     _pretty_params.short_description = "Params (pretty)"
+
+
+
+
+admin.site.register(BasePaymentGateWay)

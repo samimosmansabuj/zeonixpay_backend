@@ -3,10 +3,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.exceptions import PermissionDenied
-from .models import CustomUser, UserPaymentMethod, UserId, UserRole, Merchant, MerchantWallet
-from .serializers import CustomUserSerializer, RegistrationSerializer, MerchantLoginSerializer, UserPaymentMethodSerializer, AdminLoginSerializer, MerchantRegistrationSerializer, MerchantSerializer, UserSerializer
+from .models import CustomUser, UserPaymentMethod, UserId, UserRole, Merchant, MerchantWallet, BasePaymentGateWay
+from .serializers import CustomUserSerializer, RegistrationSerializer, MerchantLoginSerializer, UserPaymentMethodSerializer, AdminLoginSerializer, MerchantRegistrationSerializer, MerchantSerializer, UserSerializer, BasePaymentGateWaySerializer
 from .utils import CustomTokenObtainPairView, CustomUserCreateAPIView, CustomMerchantUserViewsets
-from .permissions import AdminCreatePermission
+from .permissions import AdminCreatePermission, AdminAllPermission
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.decorators import api_view, permission_classes
@@ -210,5 +210,23 @@ class UpdateUserMerchantAPIView(APIView):
                 "message": "Updated successfully"
             }, status=status.HTTP_200_OK
         )
+
+
+
+class BasePaymentGateWayViewSet(viewsets.ModelViewSet):
+    queryset = BasePaymentGateWay.objects.all().order_by('-created_at')
+    serializer_class = BasePaymentGateWaySerializer
+    permission_classes = [AdminAllPermission]
+    lookup_field = 'method_uuid'
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        method = self.request.query_params.get('method')
+        if method:
+            queryset = queryset.filter(method=method)
+        return queryset
+
+
+
 
 

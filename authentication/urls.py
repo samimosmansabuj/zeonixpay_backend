@@ -2,8 +2,8 @@ from django.urls import path, include
 from .views import *
 from rest_framework.routers import DefaultRouter
 
-# router = DefaultRouter()
-# router.register(r'brands', UserBrandView, basename='user-brands')
+router = DefaultRouter()
+router.register(r'payment-gateways', BasePaymentGateWayViewSet, basename='payment-gateways')
 # router.register(r'payment-methods', UserPaymentMethodView, basename='user-payment-method')
 
 
@@ -25,6 +25,8 @@ urlpatterns = [
     # User Profile URL
     path('user/profile/', UserProfileView.as_view(), name='user-profile'),
     path('user/profile/merchant/', UserMerchantProfileView.as_view(), name='user-profile-merchant'),
-    path('profile/update/', UpdateUserMerchantAPIView.as_view(), name='user-merchant-profile-update')
+    path('profile/update/', UpdateUserMerchantAPIView.as_view(), name='user-merchant-profile-update'),
+    
+    path('admin/', include(router.urls))
 ]
 

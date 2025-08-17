@@ -1,27 +1,14 @@
-from dotenv import load_dotenv
 from django.core.cache import cache
-import os
 import requests
 from rest_framework import views
 from django.shortcuts import redirect, get_object_or_404
 from django.urls import reverse
 from rest_framework.response import Response
 from core.models import Invoice
-from rest_framework.exceptions import NotFound, ValidationError, AuthenticationFailed
+from rest_framework.exceptions import NotFound, ValidationError
 from core.utils import DataEncryptDecrypt
-import json
-from django.shortcuts import HttpResponse
 from urllib.parse import urlencode
-
-
-load_dotenv()
-
-BKASH_BASE_URL = os.getenv("BKASH_BASE_URL")
-BKASH_APP_KEY = os.getenv("BKASH_APP_KEY")
-BKASH_APP_SECRET = os.getenv("BKASH_APP_SECRET")
-BKASH_USERNAME = os.getenv("BKASH_USERNAME")
-BKASH_PASSWORD = os.getenv("BKASH_PASSWORD")
-BKASH_CALLBACK_BASE_URL = os.getenv("BKASH_CALLBACK_BASE_URL")
+from authentication.models import BasePaymentGateWay
 
 BKASH_ID_TOKEN_CACHE_KEY = "bkash:id_token"
 BKASH_REFRESH_TOKEN_CACHE_KEY = "bkash:refresh_token"
@@ -34,12 +21,12 @@ class BKashError(Exception):
     pass
 
 class BKashClient:
-    def __init__(self):
-        self.base = f"{BKASH_BASE_URL}tokenized/checkout/"
-        self.app_key = BKASH_APP_KEY
-        self.app_secret = BKASH_APP_SECRET
-        self.username = BKASH_USERNAME
-        self.password = BKASH_PASSWORD
+    def __init__(self, random_bkash_gateway):
+        self.base = f"{random_bkash_gateway.base_url}tokenized/checkout/"
+        self.app_key = str(random_bkash_gateway.details_json["app_key"])
+        self.app_secret = str(random_bkash_gateway.details_json["app_secret"])
+        self.username = str(random_bkash_gateway.details_json["username"])
+        self.password = str(random_bkash_gateway.details_json["password"])
 
     # ------- token helpers -------
     def _grant_token(self):
@@ -53,6 +40,7 @@ class BKashClient:
             "password": self.password,
             "Content-Type": "application/json"
         }
+        
         r = requests.post(url, json=data, headers=headers, timeout=30)
         if r.status_code != 200:
             raise BKashError(f"Grant token failed: {r.status_code} {r.text}")
@@ -62,7 +50,7 @@ class BKashClient:
         token_type = body.get("token_type", "Bearer")
         if not id_token or not refresh_token:
             raise BKashError(f"Bad grant token response: {body}")
-
+        
         cache.set(BKASH_ID_TOKEN_CACHE_KEY, f"{token_type} {id_token}", BKASH_ID_TOKEN_TTL)
         cache.set(BKASH_REFRESH_TOKEN_CACHE_KEY, refresh_token, BKASH_REFRESH_TOKEN_TTL)        
         return f"{token_type} {id_token}"
@@ -125,7 +113,8 @@ class BKashClient:
         }
         if payer_reference:
             # payload["payerReference"] = "TokenizedCheckout"
-            payload["payerReference"] = "01929918378"
+            # payload["payerReference"] = "01929918378"
+            payload["payerReference"] = "01770618575"
         if agreement_id:
             payload["agreementID"] = agreement_id
 
@@ -135,7 +124,7 @@ class BKashClient:
         return r.json()
 
     def execute_payment(self, payment_id: str):
-        url = self.base + "execute"
+        url = f"{self.base}execute"
         payload = {"paymentID": payment_id}
         r = requests.post(url, json=payload, headers=self._headers_auth(), timeout=30)
         if r.status_code != 200:
@@ -170,6 +159,25 @@ class BKashClient:
 
 
 # ===============================================================================================
+def get_next_payment_gateway(method):
+    gateways = BasePaymentGateWay.objects.filter(method=method).order_by('id')
+    print(gateways)
+    if not gateways.exists():
+        return None
+    
+    last_id = cache.get("last_used_bkash_id")
+    if last_id:
+        next_gateway = gateways.filter(id__gt=last_id).first()
+        if not next_gateway:
+            next_gateway = gateways.first()
+    
+    else:
+        next_gateway = gateways.first()
+    
+    cache.set("last_used_bkash_id", next_gateway.id, None)
+    return next_gateway
+
+
 class BKashCreatePaymentView(views.APIView):
     def _create_and_maybe_redirect(self, request, invoice_payment_id: str):
         if not invoice_payment_id:
@@ -193,9 +201,12 @@ class BKashCreatePaymentView(views.APIView):
                     'message': f"This invoice is already {invoice.pay_status} and cannot be edited."
                 }
             )
-
-        client = BKashClient()
-        callback_url = f"{BKASH_CALLBACK_BASE_URL}{reverse('bkash_callback', kwargs={'invoice_payment_id': str(invoice_payment_id)})}"
+        
+        random_bkash_gateway = get_next_payment_gateway(method='bkash')
+        invoice.payment_gateway = random_bkash_gateway
+        invoice.save(update_fields=["payment_gateway"])
+        client = BKashClient(invoice.payment_gateway)
+        callback_url = f"{invoice.payment_gateway.callback_base_url}{reverse('bkash_callback', kwargs={'invoice_payment_id': str(invoice_payment_id)})}"
         try:
             resp = client.create_payment(
                 amount=invoice.customer_amount,
@@ -243,22 +254,24 @@ class BKashCallbackView(views.APIView):
         payment_id = request.GET.get("paymentID")
         status = request.GET.get("status")
         # signature = request.GET.get("signature")
+        
+        invoice = get_object_or_404(Invoice, method_payment_id=payment_id, invoice_payment_id=invoice_payment_id)
 
         if not payment_id or not status:
             raise ValidationError("Missing paymentID or status.")
         
-        client = BKashClient()
+        client = BKashClient(invoice.payment_gateway)
         try:
             response = client.execute_payment(payment_id=payment_id)
         except BKashError as e:
             return Response({"status": False, "message": str(e)}, status=502)
         
-        invoice = get_object_or_404(Invoice, method_payment_id=payment_id, invoice_payment_id=invoice_payment_id)
-        if type(invoice.data) is str:
-            client_callback_url = self.decrypt_data(json.loads(invoice.data))
-        else:
-            client_callback_url = self.decrypt_data(invoice.data)
         
+        # if type(invoice.data) is str:
+        #     client_callback_url = self.decrypt_data(json.loads(invoice.data))
+        # else:
+        #     client_callback_url = self.decrypt_data(invoice.data)
+        client_callback_url = invoice.data
 
         # Success: Payment completed successfully
         if status == "success" and response.get("transactionStatus") == "Completed":
@@ -269,25 +282,25 @@ class BKashCallbackView(views.APIView):
             invoice.save()
             
             query_string = urlencode(response)
-            redirect_url = f"{client_callback_url['success_url']}?{query_string}"
-            return redirect(redirect_url)
+            redirect_url = f"{client_callback_url['success_url' or 'success']}?{query_string}"
+            # return redirect(redirect_url)
             
-            # return Response({
-            #     "status": True,
-            #     "message": "Payment has been successfully completed.",
-            #     "Execute API Response": response,
-            #     'client_callback_url': client_callback_url['success_url']
-            # }, status=200)
+            return Response({
+                "status": True,
+                "message": "Payment has been successfully completed.",
+                "Execute API Response": response,
+                'client_callback_url': redirect_url
+            }, status=200)
         
         # Failure: Payment failed
         elif status == "failure":
-            invoice.pay_status = "failed"
-            invoice.save()
+            # invoice.pay_status = "failed"
+            # invoice.save()
             return Response({
                 "status": False,
                 "message": "Payment failed. Please try again.",
                 "Execute API Response": response,
-                'client_callback_url': client_callback_url['failed_url']
+                'client_callback_url': client_callback_url['failed_url', 'failed']
             }, status=400)
         
         # Cancel: Payment was canceled
@@ -298,7 +311,7 @@ class BKashCallbackView(views.APIView):
                 "status": False,
                 "message": "Payment was canceled by the user.",
                 "Execute API Response": response,
-                'client_callback_url': client_callback_url['cancel_url']
+                'client_callback_url': client_callback_url['cancel_url' or 'cancel']
             }, status=400)
         
         
