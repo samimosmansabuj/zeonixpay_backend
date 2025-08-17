@@ -1,5 +1,5 @@
 from django.db import models
-from authentication.models import CustomUser, Merchant, APIKey, MerchantWallet, UserPaymentMethod
+from authentication.models import CustomUser, Merchant, APIKey, MerchantWallet, UserPaymentMethod, BasePaymentGateWay
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.core.exceptions import ValidationError
@@ -36,6 +36,7 @@ class Invoice(models.Model):
     customer_address = models.CharField(blank=True, null=True)
     customer_description = models.TextField(blank=True, null=True)
     method = models.CharField(max_length=50, blank=True, null=True)
+    payment_gateway = models.ForeignKey(BasePaymentGateWay, on_delete=models.SET_NULL, blank=True, null=True, related_name='invoices')
     
     
     status = models.CharField(max_length=15, choices=STATUS, default='active')
@@ -84,6 +85,7 @@ class Invoice(models.Model):
         self.edit_restricted_method()
         
         if not self.invoice_payment_id:
+            print(not self.invoice_payment_id)
             self.invoice_payment_id = uuid.uuid4().hex
         
         if not self.invoice_trxn:

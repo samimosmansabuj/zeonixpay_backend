@@ -164,3 +164,48 @@ class UserPaymentMethod(models.Model):
 
 
 
+
+
+
+
+
+
+
+# ========================================Payment Method Start===================================
+class BasePaymentGateWay(models.Model):
+    METHOD = (
+        ('bkash', 'bkash'),
+        ('bkash-agent', 'bkash-agent'),
+        ('bkash-personal', 'bkash-personal'),
+        ('nagad', 'nagad'),
+        ('nagad-agent', 'nagad-agent'),
+        ('nagad-personal', 'nagad-personal'),
+        ('rocket', 'rocket'),
+        ('rocket-agent', 'rocket-agent'),
+        ('rocket-personal', 'rocket-personal'),
+        ('bank', 'bank'),
+        ('crypto', 'crypto')
+    )
+    
+    method = models.CharField(max_length=20, choices=METHOD)
+    method_uuid = models.CharField(max_length=255, unique=True, editable=False)
+    
+    base_url = models.URLField(max_length=255, blank=True, null=True)
+    details_json = models.JSONField(blank=True, null=True)
+    callback_base_url = models.URLField(max_length=255)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def save(self, *args, **kwargs):
+        if not self.method_uuid:
+            self.method_uuid = uuid.uuid4().hex
+        return super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"{self.method} - {self.method_uuid}"
+
+
+
+
+

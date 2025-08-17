@@ -3,9 +3,12 @@ from django.urls import path, include
 from django.shortcuts import HttpResponse
 
 def home(request):
-    if request.GET['paymentID'] or request.GET['trxID'] or request.GET['transactionStatus']:
-        return HttpResponse(f"Home! (Redirect - Bkash < Website < Client {request.GET['transactionStatus']} URL)")
-    return HttpResponse(f"Home! (Redirect - Bkash < Website < Client Success/Cancel/Failed URL)")
+    try:
+        if request.GET['paymentID'] or request.GET['trxID'] or request.GET['transactionStatus']:
+            return HttpResponse(f"Home! (Redirect - Bkash < Website < Client {request.GET['transactionStatus']} URL)")
+        return HttpResponse(f"Home! (Redirect - Bkash < Website < Client Success/Cancel/Failed URL)")
+    except:
+        return HttpResponse("For Payment CallBack, Need paymentID from Payment Method!")
 
 urlpatterns = [
     path('admin/', admin.site.urls),

@@ -10,6 +10,7 @@ from rest_framework import status
 from rest_framework.exceptions import ValidationError, NotFound
 from rest_framework.response import Response
 from .permissions import IsOwnerByUser
+import random, string
 
 # ========================Authentication Token utils Start=============================
 class CustomLoginSerializer(serializers.Serializer):
@@ -239,4 +240,19 @@ class CustomMerchantUserViewsets(viewsets.ModelViewSet):
                 'message': self.delete_success_message,
             }, status=status.HTTP_200_OK
         )
+
+
+
+
+
+# ==========================Generate Utils Method Start================================
+def genereate_merchant_id(model):
+        unique = False
+        while not unique:
+            merchant_id = ''.join(random.choices(string.digits, k=6))
+            if not model.objects.filter(merchant_id=merchant_id).exists():
+                unique = True
+                return merchant_id
+
+# ==========================Generate Utils Method End================================
 

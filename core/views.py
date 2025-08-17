@@ -15,6 +15,9 @@ from django.urls import reverse
 from .payment import bkash
 import json
 from rest_framework.decorators import action
+from dotenv import load_dotenv
+import os
+load_dotenv()
 
 
 
@@ -55,18 +58,24 @@ class CreatePayment(views.APIView):
         try:
             merchant = self.authenticate_using_api_key_and_secret(request)
             post_data = request.data.copy()
-            data = self.json_encrypted(post_data)
-            serializer = InvoiceSerializer(data=data)
+            call_back_url_json = {
+                "success_url": post_data.get("success_url", ""),
+                "cancel_url": post_data.get("cancel_url", ""),
+                "failed_url": post_data.get("failed_url", "")
+            }
+            post_data['data'] = json.dumps(call_back_url_json)
+            serializer = InvoiceSerializer(data=post_data)
             serializer.is_valid(raise_exception=True)
             serializer.save(merchant=merchant)
             invoice = serializer.instance
             
             if invoice.method:
                 if invoice.method.lower() == 'bkash':
-                    # url = reverse('get-payment-bkash', kwargs={'invoice_payment_id': str(invoice.invoice_payment_id)})
-                    url = f"{reverse('get-payment-bkash')}?invoice_payment_id={invoice.invoice_payment_id}"
-                    return redirect(f"{url}?redirect=1")
-                    # return redirect(f"{url}")
+                    # url = f"{reverse('get-payment-bkash')}?invoice_payment_id={invoice.invoice_payment_id}"
+                    # return redirect(f"{url}?redirect=1")
+                    
+                    url = f"{reverse('get-payment')}?invoice_payment_id={invoice.invoice_payment_id}&method=bkash"
+                    return redirect(url)
                 elif invoice.method.lower() == 'nagad':
                     return Response(
                         {
@@ -75,7 +84,6 @@ class CreatePayment(views.APIView):
                     )
             else:
                 return redirect(f"{reverse('get-payment')}?invoice_payment_id={invoice.invoice_payment_id}")
-                # return redirect('get-payment', invoice_payment_id=invoice.invoice_payment_id)
         except Exception as e:
             return Response(
                 {
@@ -149,26 +157,33 @@ class GetOnlinePayment(views.APIView):
         
         method = request.query_params.get("method")
         if method == 'bkash':
-            url = reverse('get-payment-bkash', kwargs={'invoice_payment_id': str(invoice_payment_id)})
-            return redirect(f"{url}?redirect=1")
+            url = reverse('get-payment-bkash')
+            return redirect(f"{url}?invoice_payment_id={invoice_payment_id}&redirect=1")
         elif method == 'nagad':
             return Response(
                 {
                     'message': 'Redirect Nagad Payment Gateway URL!'
-                }
+                }, status=status.HTTP_200_OK
             )
+        elif method == 'bkash-personal':
+            return Response(
+                {
+                    'message': 'Bkash Personal Payment Process',
+                    'url': f"{os.getenv("WEBSITE_BASE_URL")}{reverse("bkash-personal-payment")}?invoice_payment_id={invoice_payment_id}"
+                }, status=status.HTTP_200_OK
+            )
+        
         payment_methods = [
-            {"method": "bkash", "name": f"<a href=f'{bkash.BKASH_CALLBACK_BASE_URL}/api/v1/get-payment/bkash/?invoice_payment_id={invoice_payment_id}&redirect=1'>Bkash</a>"},
-            {"method": "nagad", "name": "Nagad"},
-            {"method": "rocket", "name": "Rocket"},
-            {"method": "bank", "name": "Bank"}
+            {"method": "bkash", "url": f"<a href=f'{os.getenv("WEBSITE_BASE_URL")}/api/v1/get-payment/bkash/?invoice_payment_id={invoice_payment_id}&redirect=1'>Bkash</a>"},
+            {"method": "nagad", "url": "Nagad"},
+            {"method": "rocket", "url": "Rocket"},
+            {"method": "bank", "url": "Bank"}
         ]
         
         return Response({
             'status': True,
             'payment_methods': payment_methods
         }, status=status.HTTP_200_OK)
-
 
 
 # ===============================================================================================
@@ -221,8 +236,14 @@ class InvoiceViewSet(CustomPaymentSectionViewsets):
     def create(self, request, *args, **kwargs):
         try:
             post_data = request.data.copy()
-            data = self.json_encrypted(post_data)
-            serializer = self.get_serializer(data=data)
+            call_back_url_json = {
+                "success_url": post_data.get("success_url", ""),
+                "cancel_url": post_data.get("cancel_url", ""),
+                "failed_url": post_data.get("failed_url", "")
+            }
+            post_data['data'] = json.dumps(call_back_url_json)
+            # data = self.json_encrypted(post_data)
+            serializer = self.get_serializer(data=post_data)
             serializer.is_valid(raise_exception=True)
             self.perform_create(serializer)
             return Response(
@@ -334,14 +355,14 @@ class UserPaymentMethodView(CustomPaymentSectionViewsets):
                 {
                     'status': True,
                     'message': "Primary Payment Method Set Successfully!"
-                }, status=status.HTTP_400_BAD_REQUEST
+                }, status=status.HTTP_200_OK
             )
         except Exception as e:
             return Response(
                 {
                     'status': False,
                     'message': str(e)
-                }, status=status.HTTP_200_OK
+                }, status=status.HTTP_400_BAD_REQUEST
             )
     
     @action(methods=['patch', 'put'], detail=True, url_path='set-active-deactive')
@@ -359,14 +380,14 @@ class UserPaymentMethodView(CustomPaymentSectionViewsets):
                 {
                     'status': True,
                     'message': message
-                }, status=status.HTTP_400_BAD_REQUEST
+                }, status=status.HTTP_200_OK
             )
         except Exception as e:
             return Response(
                 {
                     'status': False,
                     'message': str(e)
-                }, status=status.HTTP_200_OK
+                }, status=status.HTTP_400_BAD_REQUEST
             )
     
     

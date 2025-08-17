@@ -34,13 +34,19 @@ class WithdrawRequestSerializer(serializers.ModelSerializer):
         fields = '__all__'
     
     def get_store_name(self, obj):
-        return obj.merchant.brand_name
+        return obj.merchant.brand_name or None
     
     def get_paymentMethod(self, obj):
-        return obj.payment_method.method_type
+        try:
+            return obj.payment_method.method_type
+        except:
+            return None
     
     def get_paymentDetails(self, obj):
-        return obj.payment_method.params
+        try:
+            return obj.payment_method.params
+        except:
+            return None
 
 
 class WalletTransactionSerializer(serializers.ModelSerializer):
@@ -52,7 +58,6 @@ class WalletTransactionSerializer(serializers.ModelSerializer):
     def get_store_name(self, obj):
         return obj.merchant.brand_name
     
-
 
 class UserPaymentMethodSerializer(serializers.ModelSerializer):
     class Meta:
