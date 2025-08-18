@@ -4,11 +4,11 @@ from django.shortcuts import HttpResponse
 
 def home(request):
     try:
-        if request.GET['paymentID'] or request.GET['trxID'] or request.GET['transactionStatus']:
+        if request.GET.get('paymentID') or request.GET.get('trxID') or request.GET.get('transactionStatus'):
             return HttpResponse(f"Home! (Redirect - Bkash < Website < Client {request.GET['transactionStatus']} URL)")
         return HttpResponse(f"Home! (Redirect - Bkash < Website < Client Success/Cancel/Failed URL)")
-    except:
-        return HttpResponse("For Payment CallBack, Need paymentID from Payment Method!")
+    except Exception as e:
+        return HttpResponse(f"For Payment CallBack, Need paymentID from Payment Method! {e}")
 
 urlpatterns = [
     path('admin/', admin.site.urls),

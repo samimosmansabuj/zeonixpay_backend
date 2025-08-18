@@ -206,6 +206,25 @@ class BasePaymentGateWay(models.Model):
         return f"{self.method} - {self.method_uuid}"
 
 
+class SmsDeviceKey(models.Model):
+    device_key = models.CharField(max_length=100)
+    is_active = models.BooleanField(default=True)
+    create_at = models.DateTimeField(auto_now_add=True)
+    updated_ta = models.DateTimeField(auto_now=True)
+    
+    def save(self, *args, **kwargs):
+        if self.device_key:
+            self.device_key = uuid.uuid4().__hash__
+        return super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return self.device_key
+
+
+class StorePaymentMessage(models.Model):
+    payment_number = models.CharField(max_length=20, blank=True, null=True)
+    message = models.TextField(blank=True, null=True)
+    message_date = models.DateTimeField(blank=True, null=True)
 
 
 
