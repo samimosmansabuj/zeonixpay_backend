@@ -128,6 +128,88 @@ class PaymentPayOutView(views.APIView):
             )
 
 class GetOnlinePayment(views.APIView):
+    def use_method_for_auto_redirect(self, method, invoice_payment_id):
+        if method == 'bkash':
+            url = reverse('get-payment-bkash')
+            return redirect(f"{url}?invoice_payment_id={invoice_payment_id}&redirect=1")
+        elif method == 'bkash-personal':
+            return Response(
+                {
+                    'message': 'Bkash Personal Payment Process',
+                    'url': f"{self.request.build_absolute_uri(reverse('bkash-manual-payment'))}?method={method}&invoice_payment_id={invoice_payment_id}"
+                }, status=status.HTTP_200_OK
+            )
+        elif method == 'bkash-agent':
+            return Response(
+                {
+                    'message': 'Bkash Agent Payment Process',
+                    'url': f"{self.request.build_absolute_uri(reverse('bkash-manual-payment'))}?method={method}&invoice_payment_id={invoice_payment_id}"
+                }, status=status.HTTP_200_OK
+            )
+        elif method == 'nagad':
+            return Response(
+                {
+                    'message': 'Redirect Nagad Payment Gateway URL!'
+                }, status=status.HTTP_200_OK
+            )
+        elif method == 'nagad-personal':
+            return Response(
+                {
+                    'message': 'Nagad Personal Payment Process',
+                    'url': f"{self.request.build_absolute_uri(reverse('nagad-manual-payment'))}?method={method}&invoice_payment_id={invoice_payment_id}"
+                }, status=status.HTTP_200_OK
+            )
+        elif method == 'nagad-agent':
+            return Response(
+                {
+                    'message': 'Nagad Agent Payment Process',
+                    'url': f"{self.request.build_absolute_uri(reverse('nagad-manual-payment'))}?method={method}&invoice_payment_id={invoice_payment_id}"
+                }, status=status.HTTP_200_OK
+            )
+        else:
+            return Response({
+                'status': True,
+                'payment_methods': self.get_all_payment_method(invoice_payment_id)
+            }, status=status.HTTP_200_OK)
+    
+    def get_all_payment_method(self, invoice_payment_id):
+        payment_methods = [
+            {
+                "method": "bkash",
+                "url": f"<a href=f'{self.request.build_absolute_uri(reverse('get-payment-bkash'))}?invoice_payment_id={invoice_payment_id}&redirect=1'>Bkash</a>"
+            },
+            {
+                "method": "bkash-personal",
+                "url": f"<a href=f'{self.request.build_absolute_uri(reverse('bkash-manual-payment'))}?method=bkash-personal&invoice_payment_id={invoice_payment_id}'>Bkash Personal</a>"
+            },
+            {
+                "method": "bkash-agent",
+                "url": f"<a href=f'{self.request.build_absolute_uri(reverse('bkash-manual-payment'))}?method=bkash-agent&invoice_payment_id={invoice_payment_id}'>Bkash Agent</a>"
+            },
+
+            {
+                "method": "nagad-personal",
+                "url": f"<a href=f'{self.request.build_absolute_uri(reverse('nagad-manual-payment'))}?method=nagad-personal&invoice_payment_id={invoice_payment_id}'>Nagad Personal</a>"
+            },
+            {
+                "method": "nagad-agent",
+                "url": f"<a href=f'{self.request.build_absolute_uri(reverse('nagad-manual-payment'))}?method=nagad-agent&invoice_payment_id={invoice_payment_id}'>Nagad Agent</a>"
+            },
+            
+            {
+                "method": "rocket-personal",
+                "url": f"<a href=f'{self.request.build_absolute_uri(reverse('rocket-manual-payment'))}?method=rocket-personal&invoice_payment_id={invoice_payment_id}'>Rocket Personal</a>"
+            },
+            {
+                "method": "rocket-agent",
+                "url": f"<a href=f'{self.request.build_absolute_uri(reverse('rocket-manual-payment'))}?method=rocket-agent&invoice_payment_id={invoice_payment_id}'>Rocket Agent</a>"
+            },
+            
+            {"method": "bank", "url": "Bank"}
+        ]
+        return payment_methods
+        
+    
     def get(self, request, *args, **kwargs):
         invoice_payment_id = request.GET.get('invoice_payment_id')
         if not invoice_payment_id:
@@ -140,50 +222,29 @@ class GetOnlinePayment(views.APIView):
         except Invoice.DoesNotExist:
             raise NotFound("Invoice with provided Invoice Payment ID not found.")
         
-        if invoice.pay_status.lower() == 'paid':
-            return Response(
-                {
-                    'status': False,
-                    'message': f"This invoice is already {invoice.pay_status} and cannot be edited."
-                }, status=status.HTTP_406_NOT_ACCEPTABLE
-            )
-        elif invoice.pay_status.lower() in ['failed', 'cancelled']:
-            return Response(
-                {
-                    'status': False,
-                    'message': f"This invoice is already {invoice.pay_status} and cannot be edited."
-                }, status=status.HTTP_406_NOT_ACCEPTABLE
-            )
+        status_verify = self.status_verify(invoice)
+        if status_verify:
+            return status_verify
         
         method = request.query_params.get("method")
-        if method == 'bkash':
-            url = reverse('get-payment-bkash')
-            return redirect(f"{url}?invoice_payment_id={invoice_payment_id}&redirect=1")
-        elif method == 'nagad':
-            return Response(
-                {
-                    'message': 'Redirect Nagad Payment Gateway URL!'
-                }, status=status.HTTP_200_OK
-            )
-        elif method == 'bkash-personal':
-            return Response(
-                {
-                    'message': 'Bkash Personal Payment Process',
-                    'url': f"{os.getenv("WEBSITE_BASE_URL")}{reverse("bkash-personal-payment")}?invoice_payment_id={invoice_payment_id}"
-                }, status=status.HTTP_200_OK
-            )
-        
-        payment_methods = [
-            {"method": "bkash", "url": f"<a href=f'{os.getenv("WEBSITE_BASE_URL")}/api/v1/get-payment/bkash/?invoice_payment_id={invoice_payment_id}&redirect=1'>Bkash</a>"},
-            {"method": "nagad", "url": "Nagad"},
-            {"method": "rocket", "url": "Rocket"},
-            {"method": "bank", "url": "Bank"}
-        ]
+        if method:
+            return self.use_method_for_auto_redirect(method, invoice_payment_id)
         
         return Response({
             'status': True,
-            'payment_methods': payment_methods
+            'payment_methods': self.get_all_payment_method(invoice_payment_id)
         }, status=status.HTTP_200_OK)
+    
+    
+    def status_verify(self, invoice):
+        if invoice.pay_status.lower() in ['paid', 'failed', 'cancelled']:
+            return Response(
+                {
+                    'status': False,
+                    'message': f"This invoice is already {invoice.pay_status} and cannot be edited."
+                }, status=status.HTTP_406_NOT_ACCEPTABLE
+            )
+        return False
 
 
 # ===============================================================================================

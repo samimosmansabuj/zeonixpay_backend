@@ -294,13 +294,14 @@ class BKashCallbackView(views.APIView):
         
         # Failure: Payment failed
         elif status == "failure":
-            # invoice.pay_status = "failed"
-            # invoice.save()
+            print(client_callback_url)
+            invoice.pay_status = "failed"
+            invoice.save()
             return Response({
                 "status": False,
                 "message": "Payment failed. Please try again.",
                 "Execute API Response": response,
-                'client_callback_url': client_callback_url['failed_url', 'failed']
+                'client_callback_url': client_callback_url['failed_url' or 'failed']
             }, status=400)
         
         # Cancel: Payment was canceled

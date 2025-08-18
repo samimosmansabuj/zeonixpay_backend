@@ -2,7 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import InvoiceViewSet, GetOnlinePayment, CreatePayment, WalletOverView, WalletTransactionViewSet, WithdrawRequestViewSet, PaymentPayOutView, UserPaymentMethodView, PayOutViewSet
 from .payment.bkash import BKashCreatePaymentView, BKashCallbackView
-from .payment.bkash_personal import BkashPersonalAgentPaymentView
+from .payment.personal_payment import BkashPersonalAgentPaymentView, NagadPersonalAgentPaymentView, RocketPersonalAgentPaymentView
 
 invoice_router = DefaultRouter()
 invoice_router.register(r'invoices', InvoiceViewSet, basename='invoices')
@@ -36,8 +36,11 @@ urlpatterns = [
     path('get-payment/bkash/', BKashCreatePaymentView.as_view(), name='get-payment-bkash'),
     path('payment/<str:invoice_payment_id>/bkash/callback/', BKashCallbackView.as_view(), name='bkash_callback'),
     
-    #Bkash Personal Payment URL List==========
-    path('get-payment/bkash-personal/', BkashPersonalAgentPaymentView.as_view(), name='bkash-personal-payment'),
+    #Personal Payment URL List==========
+    path('get-payment/bkash-payment/', BkashPersonalAgentPaymentView.as_view(), name='bkash-manual-payment'),
+    path('get-payment/nagad-payment/', NagadPersonalAgentPaymentView.as_view(), name='nagad-manual-payment'),
+    path('get-payment/rocket-payment/', RocketPersonalAgentPaymentView.as_view(), name='rocket-manual-payment'),
+    
     
     #API For Payment m2m=================/API key & Secret Key Verify/===========
     path('payment/create/', CreatePayment.as_view(), name='create-payment'),
