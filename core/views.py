@@ -600,8 +600,6 @@ class PayOutViewSet(CustomPaymentSectionViewsets):
             )
         return f"This Payout Request is {object.status}. Can't Delete!", None
 
-
-
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def WalletOverView(request):
