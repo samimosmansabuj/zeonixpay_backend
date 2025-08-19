@@ -599,8 +599,7 @@ class PayOutViewSet(CustomPaymentSectionViewsets):
                 }, status=status.HTTP_200_OK
             )
         return f"This Payout Request is {object.status}. Can't Delete!", None
-    
-    
+
 
 
 @api_view(['GET'])
