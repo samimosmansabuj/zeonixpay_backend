@@ -9,7 +9,7 @@ from django.contrib.auth import authenticate
 from rest_framework import status
 from rest_framework.exceptions import ValidationError, NotFound
 from rest_framework.response import Response
-from .permissions import IsOwnerByUser
+from .permissions import IsOwnerByUser, AdminAllPermission
 import random, string
 
 # ========================Authentication Token utils Start=============================
@@ -242,7 +242,115 @@ class CustomMerchantUserViewsets(viewsets.ModelViewSet):
         )
 
 
+class CustomOnlyAdminCreateViewsetsViews(viewsets.ModelViewSet):
+    permission_classes = [AdminAllPermission]
+    # filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    
+    pagination_class = None
+    model = None
+    
+    create_success_message = "Device Key Object Created!"
+    update_success_message = "Device Key Object Updated!"
+    delete_success_message = "Device Key Object Deleted!"
+    not_found_message = "Device Key Object Not Found!"
+    
+    def handle_exception(self, exc):
+        response = super().handle_exception(exc)
+        if response is not None:
+            detail = response.data.get("detail")
+            if detail is not None:
+                response.data = {"status": False, "message": self.not_found_message}
+        return response
+    
+    def retrieve(self, request, *args, **kwargs):
+        response = super().retrieve(request, *args, **kwargs)
+        try:
+            return Response(
+                {
+                    'status': True,
+                    'data': response.data
+                }, status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response(
+                {
+                    'status': False,
+                    'data': str(e)
+                }, status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    def update(self, request, *args, **kwargs):
+        try:
+            object = self.get_object()
+            serializer = self.get_serializer(object, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+            return Response(
+                {
+                    'status': True,
+                    'message': self.update_success_message,
+                    'data': serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+        except ValidationError:
+            error = {key: str(value[0]) for key, value in serializer.errors.items()}
+            return Response(
+                {
+                    'status': False,
+                    'error': error
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {
+                    'status': False,
+                    'data': str(e)
+                }, status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    def destroy(self, request, *args, **kwargs):
+        super().destroy(request, *args, **kwargs)
+        return Response(
+            {
+                'status': True,
+                'message': self.delete_success_message,
+            }, status=status.HTTP_200_OK
+        )
+    
+    def create(self, request, *args, **kwargs):
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            # self.perform_create(serializer)
+            serializer.save()
+            return Response(
+                {
+                    'status': True,
+                    'message': self.create_success_message,
+                    'data': serializer.data
+                }, status=status.HTTP_201_CREATED
+            )
+        except ValidationError:
+            error = {key: str(value[0]) for key, value in serializer.errors.items()}
+            return Response(
+                {
+                    'status': False,
+                    'error': error
+                },status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {
+                    'status': False,
+                    'error': str(e)
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+            
 
+    
 
 
 # ==========================Generate Utils Method Start================================

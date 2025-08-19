@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import CustomUser, UserRole, UserId, UserPaymentMethod, Merchant, MerchantWallet, BasePaymentGateWay
+from .models import CustomUser, UserRole, UserId, UserPaymentMethod, Merchant, MerchantWallet, BasePaymentGateWay, SmsDeviceKey, StorePaymentMessage, APIKey
 from .utils import CustomLoginSerializer
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
@@ -132,7 +132,7 @@ class MerchantRegistrationSerializer(serializers.ModelSerializer):
 
 
 
-# ========================Registration/Account Create Serializer Start=============================
+# ========================Important Base Serializer Start=============================
 class UserRoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserRole
@@ -143,6 +143,9 @@ class CustomUserSerializer(serializers.ModelSerializer):
         model = CustomUser
         fields = ['id', 'username', 'first_name', 'last_name', 'email', 'phone_number', 'status', 'role', 'pid']
 
+
+# ======================================================================================================
+# ========================================User Merchant Serializers Start=======================
 class MerchantSerializer(serializers.ModelSerializer):
     class Meta:
         model = Merchant
@@ -164,14 +167,42 @@ class UserPaymentMethodSerializer(serializers.ModelSerializer):
         model = UserPaymentMethod
         fields = '__all__'
 
+class APIKeySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = APIKey
+        fields = '__all__'
 
+# ========================================User Merchant Serializers End==========================
+# ======================================================================================================
+
+
+
+# ======================================================================================================
+# ========================================User Merchant Model Start===================================
 class BasePaymentGateWaySerializer(serializers.ModelSerializer):
     class Meta:
         model = BasePaymentGateWay
         fields = "__all__"
         read_only_fields = ['method_uuid', 'created_at', 'updated_at']
 
-# ========================Registration/Account Create Serializer Start=============================
+
+class SmsDeviceKeySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SmsDeviceKey
+        fields = "__all__"
+        read_only_fields = ["create_at", "updated_ta"]
+        extra_kwargs = {
+            "device_key": {"required": False, "allow_blank": True}
+        }
+
+class StorePaymentMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StorePaymentMessage
+        fields = "__all__"
+        read_only_fields = ["id", "create_at"]
+
+# ========================================User Merchant Model End===================================
+# ======================================================================================================
 
 
 

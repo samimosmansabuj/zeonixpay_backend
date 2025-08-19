@@ -45,14 +45,15 @@ class UserId(models.Model):
 # Signal for UserIds & UserWallet model create automatically when create a user!
 # ================================================================================
 @receiver(post_save, sender=CustomUser)
-def create_user_ids_and_wallet(sender, instance, created, **kwargs):
+def create_user_ids(sender, instance, created, **kwargs):
     if created:
         if instance.role and instance.role.name.lower() == 'merchant':
             if not hasattr(instance, 'user_ids'):
                 UserId.objects.create(user=instance)
 
 
-# ========================================User Merchant Start===================================
+# ======================================================================================================
+# ========================================User Merchant Model Start===================================
 class Merchant(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='merchant')
     merchant_id = models.CharField(default=uuid.uuid4, editable=False, unique=True)
@@ -119,18 +120,14 @@ class MerchantWallet(models.Model):
         return f"{self.merchant.brand_name} Merchant Wallet Model"
 
 @receiver(post_save, sender=Merchant)
-def create_api_key_for_merchant(sender, instance, created, **kwargs):
+def create_api_key_and_wallet_for_merchant(sender, instance, created, **kwargs):
     if created:
         if not hasattr(instance, 'api_keys'):
             APIKey.objects.create(merchant=instance)
         if not hasattr(instance, 'merchant_wallet'):
             MerchantWallet.objects.create(merchant=instance)
 
-# ========================================User Merchant End===================================
 
-
-
-# ========================================UserPaymentMethod Start===================================
 class UserPaymentMethod(models.Model):
     METHOD_TYPE = (
         ('bkash', 'Bkash'),
@@ -160,18 +157,13 @@ class UserPaymentMethod(models.Model):
     def __str__(self):
         return f"{self.method_type} Payment Method for {self.merchant.brand_name}"
 
+# ========================================User Merchant Model End===================================
+# ======================================================================================================
 
 
 
-
-
-
-
-
-
-
-
-# ========================================Payment Method Start===================================
+# ======================================================================================================
+# ===============Site Payment Gate, And Payment Message Store and Device Management Start==========
 class BasePaymentGateWay(models.Model):
     METHOD = (
         ('bkash', 'bkash'),
@@ -207,14 +199,25 @@ class BasePaymentGateWay(models.Model):
 
 
 class SmsDeviceKey(models.Model):
+    device_name = models.CharField(max_length=50)
     device_key = models.CharField(max_length=100)
+    device_pin = models.CharField(max_length=255)
     is_active = models.BooleanField(default=True)
     create_at = models.DateTimeField(auto_now_add=True)
     updated_ta = models.DateTimeField(auto_now=True)
     
+    def set_pin(self, raw_pin: str):
+        self.device_pin = make_password(raw_pin)
+
+    def check_pin(self, raw_pin: str) -> bool:
+        return check_password(raw_pin, self.device_pin)
+    
     def save(self, *args, **kwargs):
-        if self.device_key:
-            self.device_key = uuid.uuid4().__hash__
+        if self.device_pin and not self.device_pin.startswith("pbkdf2_"):
+            self.device_pin = make_password(self.device_pin)
+        
+        if not self.device_key:
+            self.device_key = uuid.uuid4().hex
         return super().save(*args, **kwargs)
     
     def __str__(self):
@@ -222,9 +225,12 @@ class SmsDeviceKey(models.Model):
 
 
 class StorePaymentMessage(models.Model):
+    device = models.ForeignKey(SmsDeviceKey, on_delete=models.SET_NULL, related_name='payment_messages', null=True, blank=True)
     payment_number = models.CharField(max_length=20, blank=True, null=True)
     message = models.TextField(blank=True, null=True)
     message_date = models.DateTimeField(blank=True, null=True)
+    create_at = models.DateTimeField(auto_now_add=True)
 
-
+# ===============Site Payment Gate, And Payment Message Store and Device Management End==========
+# ======================================================================================================
 

@@ -10,7 +10,7 @@ from .models import (
     APIKey,
     MerchantWallet,
     UserPaymentMethod,
-    BasePaymentGateWay,
+    BasePaymentGateWay, StorePaymentMessage, SmsDeviceKey
 )
 
 
@@ -224,4 +224,33 @@ class UserPaymentMethodAdmin(admin.ModelAdmin):
 
 
 
-admin.site.register(BasePaymentGateWay)
+
+
+
+
+@admin.register(BasePaymentGateWay)
+class BasePaymentGateWayAdmin(admin.ModelAdmin):
+    list_display = ("id", "method", "method_uuid", "base_url", "callback_base_url", "created_at", "updated_at")
+    list_filter = ("method", "created_at")
+    search_fields = ("method", "method_uuid", "base_url", "callback_base_url")
+    ordering = ("-created_at",)
+    readonly_fields = ("method_uuid", "created_at", "updated_at")
+
+
+@admin.register(SmsDeviceKey)
+class SmsDeviceKeyAdmin(admin.ModelAdmin):
+    list_display = ("id", "device_name", "device_key", "is_active", "create_at", "updated_ta")
+    list_filter = ("is_active", "create_at")
+    search_fields = ("device_name", "device_key")
+    ordering = ("-create_at",)
+
+
+@admin.register(StorePaymentMessage)
+class StorePaymentMessageAdmin(admin.ModelAdmin):
+    list_display = ("id", 'device', "payment_number", "message", "message_date", "create_at")
+    list_filter = ("message_date", "device", "create_at")
+    search_fields = ("payment_number", "device__device_name", "message")
+    ordering = ("-create_at",)
+
+
+

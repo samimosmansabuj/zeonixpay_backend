@@ -4,7 +4,8 @@ from rest_framework.routers import DefaultRouter
 
 router = DefaultRouter()
 router.register(r'payment-gateways', BasePaymentGateWayViewSet, basename='payment-gateways')
-# router.register(r'payment-methods', UserPaymentMethodView, basename='user-payment-method')
+router.register(r"sms-device-keys", SmsDeviceKeyViewSet, basename="sms-device-key")
+router.register(r"store-payment-messages", StorePaymentMessageViewSet, basename="store-payment-message")
 
 
 urlpatterns = [
@@ -26,7 +27,13 @@ urlpatterns = [
     path('user/profile/', UserProfileView.as_view(), name='user-profile'),
     path('user/profile/merchant/', UserMerchantProfileView.as_view(), name='user-profile-merchant'),
     path('profile/update/', UpdateUserMerchantAPIView.as_view(), name='user-merchant-profile-update'),
+    path("api/keys/", APIKeyListOrDetailsAPIView.as_view(), name="api-key-list"),
+    path("api/keys/<int:pk>/", APIKeyDetailAPIView.as_view(), name="api-key-detail"),
     
-    path('admin/', include(router.urls))
+    
+    path('admin/', include(router.urls)),
+    path("store-payment-messages/", StorePaymentMessageCreateView.as_view(), name="store-payment-message-create"),
+    path("device-verify/", VerifyDeviceKeyAPIView.as_view(), name="device-verify"),
+    
 ]
 
