@@ -1,7 +1,7 @@
-from rest_framework import serializers
 from .models import CustomUser, UserRole, UserId, UserPaymentMethod, Merchant, MerchantWallet, BasePaymentGateWay, SmsDeviceKey, StorePaymentMessage, APIKey
-from .utils import CustomLoginSerializer
 from django.contrib.auth.hashers import make_password
+from .utils import CustomLoginSerializer
+from rest_framework import serializers
 from django.db import transaction
 
 
@@ -178,7 +178,7 @@ class APIKeySerializer(serializers.ModelSerializer):
 
 
 # ======================================================================================================
-# ========================================User Merchant Model Start===================================
+# ========================================User Merchant Model Start================================
 class BasePaymentGateWaySerializer(serializers.ModelSerializer):
     class Meta:
         model = BasePaymentGateWay
@@ -201,7 +201,7 @@ class StorePaymentMessageSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ["id", "create_at"]
 
-# ========================================User Merchant Model End===================================
+# ========================================User Merchant Model End================================
 # ======================================================================================================
 
 

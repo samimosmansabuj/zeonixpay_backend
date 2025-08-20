@@ -1,7 +1,7 @@
-# admin.py
-from django.contrib import admin
-from django.utils.html import format_html
 from django.contrib.contenttypes.models import ContentType
+from django.utils.html import format_html
+from django.contrib import admin
+
 
 from .models import (
     Invoice,

@@ -1,22 +1,20 @@
 from .serializers import InvoiceSerializer, PaymentTransferSerializer, WithdrawRequestSerializer, WalletTransactionSerializer, UserPaymentMethodSerializer
 from rest_framework.exceptions import NotFound, ValidationError, AuthenticationFailed
-from authentication.models import Merchant, APIKey, UserPaymentMethod, MerchantWallet
+from authentication.models import Merchant, APIKey, UserPaymentMethod
 from .models import Invoice, PaymentTransfer, WithdrawRequest, WalletTransaction
-from authentication.permissions import IsOwnerByUser, MerchantCreatePermission
 from .utils import CustomPaymentSectionViewsets, DataEncryptDecrypt
 from rest_framework.decorators import api_view, permission_classes
+from authentication.permissions import MerchantCreatePermission
 from authentication.serializers import MerchantWalletSerializer
-from django.shortcuts import redirect, get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.decorators import action
 from rest_framework import views, status
+from django.shortcuts import redirect
 from rest_framework import viewsets
 from django.urls import reverse
-from .payment import bkash
-import json
-from rest_framework.decorators import action
 from dotenv import load_dotenv
-import os
+import json
 load_dotenv()
 
 
@@ -40,6 +38,8 @@ class CreatePayment(views.APIView):
 
         # if not merchant.check_secret(secret_key):
         #     raise AuthenticationFailed("Invalid SECRET-KEY.")
+        
+        # self._check_domain(request, api_key.merchant)
 
         return api_key.merchant
         
@@ -53,6 +53,13 @@ class CreatePayment(views.APIView):
         encrypt_data_json = object.encrypt_data(url_json)
         post_data['data'] = json.dumps(encrypt_data_json)
         return post_data
+    
+    # def _check_domain(self, request, merchant):
+    #     request_domain = request.META.get('HTTP_HOST', '').lower()
+    #     allowed_domains = merchant.domain_name if isinstance(merchant.domain_name, list) else [merchant.domain_name]
+        
+    #     if not any(request_domain.endswith(allowed_domain) for allowed_domain in allowed_domains):
+    #         raise AuthenticationFailed(f"Access denied from domain {request_domain}.")
     
     def post(self, request, *args, **kwargs):
         try:

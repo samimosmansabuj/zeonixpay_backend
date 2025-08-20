@@ -1,10 +1,10 @@
-from rest_framework import viewsets
 from authentication.permissions import IsOwnerByUser
-from authentication.models import CustomUser, Merchant
 from rest_framework.exceptions import ValidationError, NotFound
+from authentication.models import CustomUser, Merchant
 from rest_framework.response import Response
-from rest_framework import status
 from cryptography.fernet import Fernet
+from rest_framework import viewsets
+from rest_framework import status
 import json
 import base64
 

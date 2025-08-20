@@ -27,6 +27,7 @@ class BKashClient:
         self.app_secret = str(random_bkash_gateway.details_json["app_secret"])
         self.username = str(random_bkash_gateway.details_json["username"])
         self.password = str(random_bkash_gateway.details_json["password"])
+        self.product_name = str(random_bkash_gateway.details_json["product_name"]) if random_bkash_gateway.details_json.get("product_name") else None
 
     # ------- token helpers -------
     def _grant_token(self):
@@ -50,9 +51,9 @@ class BKashClient:
         token_type = body.get("token_type", "Bearer")
         if not id_token or not refresh_token:
             raise BKashError(f"Bad grant token response: {body}")
-        
+
         cache.set(BKASH_ID_TOKEN_CACHE_KEY, f"{token_type} {id_token}", BKASH_ID_TOKEN_TTL)
-        cache.set(BKASH_REFRESH_TOKEN_CACHE_KEY, refresh_token, BKASH_REFRESH_TOKEN_TTL)        
+        cache.set(BKASH_REFRESH_TOKEN_CACHE_KEY, refresh_token, BKASH_REFRESH_TOKEN_TTL)
         return f"{token_type} {id_token}"
 
     def _refresh_token(self, refresh_token):
@@ -89,15 +90,14 @@ class BKashClient:
                 return self._refresh_token(refresh_token)
             except Exception:
                 pass
-        
         return self._grant_token()
 
     def _headers_auth(self):
         return {
-            "Accept": "application/json",
-            "Content-Type": "application/json",
+            "accept": "application/json",
             "Authorization": self._authorization(),
-            "X-App-Key": self.app_key
+            "X-App-Key": self.app_key,
+            "content-type": "application/json"
         }
 
     # ------- payment endpoints -------
@@ -112,13 +112,14 @@ class BKashClient:
             "merchantInvoiceNumber": merchant_invoice_number,
         }
         if payer_reference:
+            payload["payerReference"] = self.product_name if self.product_name is not None else "01770618575"
             # payload["payerReference"] = "TokenizedCheckout"
-            # payload["payerReference"] = "01929918378"
-            payload["payerReference"] = "01770618575"
         if agreement_id:
             payload["agreementID"] = agreement_id
 
-        r = requests.post(url, json=payload, headers=self._headers_auth(), timeout=30)
+        print("******* Header Auth: ", self._headers_auth())
+        
+        r = requests.post(url, json=payload, headers=self._headers_auth())
         if r.status_code != 200:
             raise BKashError(f"Create payment failed: {r.status_code} {r.text}")
         return r.json()
@@ -160,9 +161,9 @@ class BKashClient:
 
 # ===============================================================================================
 def get_next_payment_gateway(method):
-    gateways = BasePaymentGateWay.objects.filter(method=method).order_by('id')
-    print(gateways)
+    gateways = BasePaymentGateWay.objects.filter(method=method, is_active=True).order_by('id')
     if not gateways.exists():
+        print("**********", gateways)
         return None
     
     last_id = cache.get("last_used_bkash_id")
@@ -203,9 +204,19 @@ class BKashCreatePaymentView(views.APIView):
             )
         
         random_bkash_gateway = get_next_payment_gateway(method='bkash')
+        if random_bkash_gateway is None:
+            return Response(
+                {
+                    'status': False,
+                    'message': 'No Bkash Payment Method Found!'
+                }
+            )
+        
+        
         invoice.payment_gateway = random_bkash_gateway
         invoice.save(update_fields=["payment_gateway"])
         client = BKashClient(invoice.payment_gateway)
+        # callback_url = f"{invoice.payment_gateway.callback_base_url}?invoice_payment_id={invoice_payment_id}"
         callback_url = f"{invoice.payment_gateway.callback_base_url}{reverse('bkash_callback', kwargs={'invoice_payment_id': str(invoice_payment_id)})}"
         try:
             resp = client.create_payment(
@@ -294,7 +305,7 @@ class BKashCallbackView(views.APIView):
         
         # Failure: Payment failed
         elif status == "failure":
-            print(client_callback_url)
+            # print(client_callback_url)
             invoice.pay_status = "failed"
             invoice.save()
             return Response({
