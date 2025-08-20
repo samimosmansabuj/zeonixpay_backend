@@ -1,15 +1,16 @@
-from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
+
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
-from rest_framework.views import APIView
-from rest_framework import serializers, viewsets
-from .models import CustomUser
-from rest_framework.generics import CreateAPIView
-from django.contrib.auth import authenticate
-from rest_framework import status
+from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
 from rest_framework.exceptions import ValidationError, NotFound
-from rest_framework.response import Response
 from .permissions import IsOwnerByUser, AdminAllPermission
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.generics import CreateAPIView
+from rest_framework import serializers, viewsets
+from django.contrib.auth import authenticate
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework import status
+from .models import CustomUser
 import random, string
 
 # ========================Authentication Token utils Start=============================

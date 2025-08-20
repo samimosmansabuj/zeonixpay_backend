@@ -7,6 +7,7 @@ from core.models import Invoice
 from rest_framework.exceptions import ValidationError
 from authentication.models import BasePaymentGateWay
 from django.core.cache import cache
+from authentication.models import StorePaymentMessage
 
 
 
@@ -63,12 +64,25 @@ class BkashPersonalAgentPaymentView(views.APIView):
                         'message': 'Payment not Verified!'
                     }, status=status.HTTP_400_BAD_REQUEST
                 )
-        
+        except ValidationError as e:
+            try:
+                error_messages = []
+                for field, errors in e.detail.items():
+                    for error in errors:
+                        error_messages.append(error)
+            except:
+                error_messages = e.detail
+            return Response(
+                {
+                    'status': False,
+                    'message': ''.join(error_messages)
+                }, status=status.HTTP_400_BAD_REQUEST
+            )
         except Exception as e:
             return Response(
                 {
                     'status': False,
-                    'message': str(e)
+                    'message': f"An unexpected error occurred: {str(e)}"
                 }, status=status.HTTP_400_BAD_REQUEST
             )
     
@@ -164,10 +178,28 @@ class BkashPersonalAgentPaymentView(views.APIView):
         return next_gateway
 
     def verify_send_money_payment(self, transaction_Id, invoice):
-        return True
+        if StorePaymentMessage.objects.filter(message_amount=invoice.customer_amount, trx_id=transaction_Id).exists():
+            bkash_payment_messages = get_object_or_404(StorePaymentMessage, message_amount=invoice.customer_amount, trx_id=transaction_Id)
+            if bkash_payment_messages.is_verified == True:
+                raise ValidationError("With this Transaction ID and Amount is already verified, Try again!")
+            else:
+                bkash_payment_messages.is_verified = True
+                bkash_payment_messages.save()
+                return True
+        else:
+            raise ValidationError("Not Found Trx_ID with your Transaction ID and Amount!")
     
     def verify_cashout_payment(self, transaction_Id, invoice):
-        return True
+        if StorePaymentMessage.objects.filter(message_amount=invoice.customer_amount, trx_id=transaction_Id).exists():
+            bkash_payment_messages = get_object_or_404(StorePaymentMessage, message_amount=invoice.customer_amount, trx_id=transaction_Id)
+            if bkash_payment_messages.is_verified == True:
+                raise ValidationError("With this Transaction ID and Amount is already verified, Try again!")
+            else:
+                bkash_payment_messages.is_verified = True
+                bkash_payment_messages.save()
+                return True
+        else:
+            raise ValidationError("Not Found Trx_ID with your Transaction ID!")
 
 
 

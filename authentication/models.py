@@ -1,12 +1,12 @@
-from django.db import models
+from django.contrib.auth.hashers import make_password, check_password
 from django.contrib.auth.models import AbstractUser
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from django.contrib.auth.hashers import make_password, check_password
-import uuid
-import secrets
-import random
-import string
+from datetime import datetime
+from django.db import models
+
+import uuid, secrets, random, string, re
+
 
 
 class UserRole(models.Model):
@@ -189,13 +189,15 @@ class BasePaymentGateWay(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    is_active = models.BooleanField(default=True)
+    
     def save(self, *args, **kwargs):
         if not self.method_uuid:
             self.method_uuid = uuid.uuid4().hex
         return super().save(*args, **kwargs)
     
     def __str__(self):
-        return f"{self.method} - {self.method_uuid}"
+        return f"{self.method} - {self.method_uuid} | {self.details_json}"
 
 
 class SmsDeviceKey(models.Model):
@@ -226,10 +228,55 @@ class SmsDeviceKey(models.Model):
 
 class StorePaymentMessage(models.Model):
     device = models.ForeignKey(SmsDeviceKey, on_delete=models.SET_NULL, related_name='payment_messages', null=True, blank=True)
-    payment_number = models.CharField(max_length=20, blank=True, null=True)
+    message_from = models.CharField(max_length=20)
     message = models.TextField(blank=True, null=True)
+    payment_number = models.CharField(max_length=20, blank=True, null=True)
+    trx_id = models.CharField(max_length=50, blank=True, null=True)
+    message_amount = models.DecimalField(decimal_places=2, max_digits=9, blank=True, null=True)
     message_date = models.DateTimeField(blank=True, null=True)
+    is_verified = models.BooleanField(default=False)
     create_at = models.DateTimeField(auto_now_add=True)
+
+    def extract_message_body(self):
+        if not self.message:
+            return None
+
+        amount_pattern = r"Tk (\d{1,3}(?:,\d{3})*(?:\.\d{2}))"
+        amount_match = re.search(amount_pattern, self.message)
+        if amount_match:
+            self.message_amount = amount_match.group(1).replace(',', '')  # Remove commas if any
+        
+        trxid_pattern = r"TrxID (\S+)"
+        trxid_match = re.search(trxid_pattern, self.message)
+        if trxid_match:
+            self.trx_id = trxid_match.group(1)
+        
+        phone_pattern = r"from (\d{11})"
+        phone_match = re.search(phone_pattern, self.message)
+        if phone_match:
+            self.payment_number = phone_match.group(1)
+        
+        
+        # Print the raw message to check for format discrepancies
+        self.message = self.message.replace('\xa0', ' ')
+        date_pattern = r"\s*at\s*(\d{2}/\d{2}/\d{4} \d{2}:\d{2})"
+        date_match = re.search(date_pattern, self.message)
+        
+        if date_match:
+            try:
+                self.message_date = datetime.strptime(date_match.group(1), "%d/%m/%Y %H:%M")
+                print("Extracted Date:", self.message_date)
+            except ValueError:
+                print("Date format error.")
+        else:
+            print("Date not found in message.")
+
+        return self.message
+
+    def save(self, *args, **kwargs):
+        self.extract_message_body()
+
+        return super().save(*args, **kwargs)
 
 # ===============Site Payment Gate, And Payment Message Store and Device Management End==========
 # ======================================================================================================

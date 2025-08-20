@@ -1,21 +1,17 @@
+from .serializers import CustomUserSerializer, RegistrationSerializer, MerchantLoginSerializer, AdminLoginSerializer, MerchantRegistrationSerializer, MerchantSerializer, UserSerializer, BasePaymentGateWaySerializer, StorePaymentMessageSerializer, SmsDeviceKeySerializer, APIKeySerializer
+from .models import UserRole, Merchant, BasePaymentGateWay, StorePaymentMessage, SmsDeviceKey, APIKey
+from .utils import CustomTokenObtainPairView, CustomUserCreateAPIView, CustomOnlyAdminCreateViewsetsViews
+from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
+from .permissions import AdminCreatePermission, AdminAllPermission
 from rest_framework import generics, status, exceptions, viewsets
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework_simplejwt.tokens import RefreshToken
+from .authentication import DeviceAuthentication
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.exceptions import PermissionDenied
-from .models import CustomUser, UserPaymentMethod, UserId, UserRole, Merchant, MerchantWallet, BasePaymentGateWay, StorePaymentMessage, SmsDeviceKey, APIKey
-from .serializers import (
-    CustomUserSerializer, RegistrationSerializer, MerchantLoginSerializer, UserPaymentMethodSerializer, AdminLoginSerializer, MerchantRegistrationSerializer, MerchantSerializer, UserSerializer, BasePaymentGateWaySerializer, StorePaymentMessageSerializer, SmsDeviceKeySerializer, APIKeySerializer
-)
-from .utils import CustomTokenObtainPairView, CustomUserCreateAPIView, CustomMerchantUserViewsets, CustomOnlyAdminCreateViewsetsViews
-from .permissions import AdminCreatePermission, AdminAllPermission
-from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
-from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework.decorators import api_view, permission_classes
-from .authentication import DeviceAuthentication
-from django.http import Http404
 from django.db.models import QuerySet
+from django.http import Http404
 
 
 # ========================Registration/Account Create Views Start===============================

@@ -1,8 +1,11 @@
 from django.contrib import admin
 from django.urls import path, include
 from django.shortcuts import HttpResponse
+from authentication.models import BasePaymentGateWay
 
 def home(request):
+    a = BasePaymentGateWay.objects.filter(method='bkash', is_active=True).order_by('id')
+    print(a)
     try:
         if request.GET.get('paymentID') or request.GET.get('trxID') or request.GET.get('transactionStatus'):
             return HttpResponse(f"Home! (Redirect - Bkash < Website < Client {request.GET['transactionStatus']} URL)")
