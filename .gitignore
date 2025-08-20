@@ -14,7 +14,6 @@ static/
 del/
 delete__/
 
-*.txt
 
 # Environment variables
 .env
@@ -38,7 +37,7 @@ public/
 tmp/
 restart.txt
 
-Documents.txt
+documentation.txt
 
 all_del/
 main.json
