@@ -1,8 +1,8 @@
 from .serializers import InvoiceSerializer, PaymentTransferSerializer, WithdrawRequestSerializer, WalletTransactionSerializer, UserPaymentMethodSerializer
+from .utils import CustomPaymentSectionViewsets, DataEncryptDecrypt, CustomPagenumberpagination
 from rest_framework.exceptions import NotFound, ValidationError, AuthenticationFailed
 from authentication.models import Merchant, APIKey, UserPaymentMethod
 from .models import Invoice, PaymentTransfer, WithdrawRequest, WalletTransaction
-from .utils import CustomPaymentSectionViewsets, DataEncryptDecrypt
 from rest_framework.decorators import api_view, permission_classes
 from authentication.permissions import MerchantCreatePermission
 from authentication.serializers import MerchantWalletSerializer
@@ -279,6 +279,7 @@ class InvoiceViewSet(CustomPaymentSectionViewsets):
     queryset = Invoice.objects.all()
     serializer_class = InvoiceSerializer
     permission_classes = [IsAuthenticated, MerchantCreatePermission]
+    pagination_class = CustomPagenumberpagination
     model = Invoice
     lookup_field = 'invoice_payment_id'
     

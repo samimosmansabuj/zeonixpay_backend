@@ -23,7 +23,6 @@ class Invoice(models.Model):
     merchant = models.ForeignKey(Merchant, on_delete=models.SET_NULL, related_name='invoices', null=True)
     
     invoice_payment_id = models.CharField(max_length=50, editable=False, unique=True)
-    data = models.JSONField(blank=True, null=True)
     callback_url = models.URLField(max_length=255, blank=True, null=True)
     method_payment_id = models.CharField(blank=True, null=True)
     
