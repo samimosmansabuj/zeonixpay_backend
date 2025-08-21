@@ -196,6 +196,7 @@ class SmsDeviceKeySerializer(serializers.ModelSerializer):
         }
 
 class StorePaymentMessageSerializer(serializers.ModelSerializer):
+    messager_receiver = serializers.CharField(required=True, error_messages={'required': 'Message receiver number required!'})
     class Meta:
         model = StorePaymentMessage
         fields = "__all__"

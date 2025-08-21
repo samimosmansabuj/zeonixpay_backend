@@ -169,12 +169,19 @@ class BasePaymentGateWay(models.Model):
         ('bkash', 'bkash'),
         ('bkash-agent', 'bkash-agent'),
         ('bkash-personal', 'bkash-personal'),
+        
         ('nagad', 'nagad'),
         ('nagad-agent', 'nagad-agent'),
         ('nagad-personal', 'nagad-personal'),
+        
         ('rocket', 'rocket'),
         ('rocket-agent', 'rocket-agent'),
         ('rocket-personal', 'rocket-personal'),
+        
+        ('bkash-sendbox', 'bkash-sendbox'),
+        ('nagad-sendbox', 'nagad-sendbox'),
+        ('rocke-sendboxt', 'rocket-sendbox'),
+        
         ('bank', 'bank'),
         ('crypto', 'crypto')
     )
@@ -228,6 +235,7 @@ class SmsDeviceKey(models.Model):
 
 class StorePaymentMessage(models.Model):
     device = models.ForeignKey(SmsDeviceKey, on_delete=models.SET_NULL, related_name='payment_messages', null=True, blank=True)
+    messager_receiver = models.CharField(max_length=20, blank=True, null=True)
     message_from = models.CharField(max_length=20)
     message = models.TextField(blank=True, null=True)
     payment_number = models.CharField(max_length=20, blank=True, null=True)

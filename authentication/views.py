@@ -419,12 +419,26 @@ class StorePaymentMessageCreateView(generics.CreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        if serializer.is_valid():
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
             device = getattr(request.user, "device", None)
             serializer.save(device=device)
             return Response({"status": True, "data": serializer.data}, status=status.HTTP_201_CREATED)
-        return Response({"status": False, "errors": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+        except exceptions.ValidationError:
+            return Response(
+                {
+                    'status': False,
+                    'message': next(iter(serializer.errors.values()))[0],
+                },status=status.HTTP_401_UNAUTHORIZED
+            )
+        except Exception as e:
+            return Response(
+                {
+                    'status': False,
+                    'message': str(e),
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class VerifyDeviceKeyAPIView(APIView):
     permission_classes = [AllowAny]
