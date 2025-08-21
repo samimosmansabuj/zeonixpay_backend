@@ -93,7 +93,7 @@ class CreatePayment(views.APIView):
             else:
                 # return redirect(f"{reverse('get-payment')}?invoice_payment_id={invoice.invoice_payment_id}")
                 
-                return redirect(f"{os.getenv("PAYMENT_SITE_BASE_URL")}/payment/?invoice_payment_id={invoice.invoice_payment_id}")
+                return redirect(f"{os.getenv('PAYMENT_SITE_BASE_URL')}/payment/?invoice_payment_id={invoice.invoice_payment_id}")
                 # return redirect(f"http://192.168.68.106:3000/payment/?invoice_payment_id={invoice.invoice_payment_id}")
         except Exception as e:
             return Response(

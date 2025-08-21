@@ -287,15 +287,15 @@ class BKashCallbackView(views.APIView):
             if not invoice.method:
                 invoice.method = 'bkash'
             invoice.save()
-            return redirect(f"{os.getenv("PAYMENT_SITE_BASE_URL")}/success/?{query_string}")
+            return redirect(f"{os.getenv('PAYMENT_SITE_BASE_URL')}/success/?{query_string}")
         elif status == "failure":
             invoice.pay_status = "failed"
             invoice.save()
-            return redirect(f"{os.getenv("PAYMENT_SITE_BASE_URL")}/success/?{query_string}")
+            return redirect(f"{os.getenv('PAYMENT_SITE_BASE_URL')}/success/?{query_string}")
         elif status == "cancel":
             invoice.pay_status = "cancelled"
             invoice.save()
-            return redirect(f"{os.getenv("PAYMENT_SITE_BASE_URL")}/success/?{query_string}")
+            return redirect(f"{os.getenv('PAYMENT_SITE_BASE_URL')}/success/?{query_string}")
         
         # Success: Payment completed successfully
         # if status == "success" and response.get("transactionStatus") == "Completed":
