@@ -1,7 +1,14 @@
 #!/usr/bin/env python
 """Django's command-line utility for administrative tasks."""
+from dotenv import load_dotenv
 import os
 import sys
+load_dotenv()
+
+default_port = os.getenv("default_port")
+if default_port:
+    from django.core.management.commands.runserver import Command as runserver
+    runserver.default_port=default_port
 
 
 def main():
