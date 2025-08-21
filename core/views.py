@@ -65,12 +65,12 @@ class CreatePayment(views.APIView):
         try:
             merchant = self.authenticate_using_api_key_and_secret(request)
             post_data = request.data.copy()
-            call_back_url_json = {
-                "success_url": post_data.get("success_url", ""),
-                "cancel_url": post_data.get("cancel_url", ""),
-                "failed_url": post_data.get("failed_url", "")
-            }
-            post_data['data'] = json.dumps(call_back_url_json)
+            # call_back_url_json = {
+            #     "success_url": post_data.get("success_url", ""),
+            #     "cancel_url": post_data.get("cancel_url", ""),
+            #     "failed_url": post_data.get("failed_url", "")
+            # }
+            # post_data['data'] = json.dumps(call_back_url_json)
             serializer = InvoiceSerializer(data=post_data)
             serializer.is_valid(raise_exception=True)
             serializer.save(merchant=merchant)
@@ -215,7 +215,6 @@ class GetOnlinePayment(views.APIView):
             {"method": "bank", "url": "Bank"}
         ]
         return payment_methods
-        
     
     def get(self, request, *args, **kwargs):
         invoice_payment_id = request.GET.get('invoice_payment_id')
@@ -239,9 +238,15 @@ class GetOnlinePayment(views.APIView):
         
         return Response({
             'status': True,
+            'invoice': {
+                "amount": invoice.customer_amount
+            },
+            'mechant_info': {
+                'brand_name': invoice.merchant.brand_name,
+                'brand_logo': invoice.merchant.brand_logo or None
+            },
             'payment_methods': self.get_all_payment_method(invoice_payment_id)
         }, status=status.HTTP_200_OK)
-    
     
     def status_verify(self, invoice):
         if invoice.pay_status.lower() in ['paid', 'failed', 'cancelled']:
@@ -304,12 +309,12 @@ class InvoiceViewSet(CustomPaymentSectionViewsets):
     def create(self, request, *args, **kwargs):
         try:
             post_data = request.data.copy()
-            call_back_url_json = {
-                "success_url": post_data.get("success_url", ""),
-                "cancel_url": post_data.get("cancel_url", ""),
-                "failed_url": post_data.get("failed_url", "")
-            }
-            post_data['data'] = json.dumps(call_back_url_json)
+            # call_back_url_json = {
+            #     "success_url": post_data.get("success_url", ""),
+            #     "cancel_url": post_data.get("cancel_url", ""),
+            #     "failed_url": post_data.get("failed_url", "")
+            # }
+            # post_data['data'] = json.dumps(call_back_url_json)
             # data = self.json_encrypted(post_data)
             serializer = self.get_serializer(data=post_data)
             serializer.is_valid(raise_exception=True)

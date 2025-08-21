@@ -47,7 +47,7 @@ class BkashPersonalAgentPaymentView(views.APIView):
                     invoice.method = payment_method
                 invoice.save()
                 
-                client_callback_url = invoice.data
+                client_callback_url = invoice.callback_url
                 redirect_url = f"{client_callback_url['success_url' or 'success']}?transactionStatus=success"
                 
                 return Response(
@@ -102,7 +102,7 @@ class BkashPersonalAgentPaymentView(views.APIView):
                     'status': True,
                     "data": {
                         "Method": f"{payment_method.title()}",
-                        "Cash-out Number": f"{payment_gateway.details_json['phone_number'] if payment_gateway is not None else "Bkash Cashout Method Not Available Right Now, Try Another Method!"}",
+                        "Cash-out Number": f"{payment_gateway.details_json['phone_number'] if payment_gateway is not None else 'Bkash Cashout Method Not Available Right Now, Try Another Method!'}",
                         "Message": f"Submit Your Phone Number & Transaction ID. Cashout Amount is {invoice.customer_amount}"
                     }
                     # 'invoice': InvoiceSerializer(invoice).data
@@ -118,7 +118,7 @@ class BkashPersonalAgentPaymentView(views.APIView):
                     'status': True,
                     "data": {
                         "Method": f"{payment_method.title()}",
-                        "Cash-out Number": f"{payment_gateway.details_json['phone_number'] if payment_gateway is not None else "Bkash Send Money Method Not Available Right Now, Try Another Method!"}",
+                        "Send Money Number": f"{payment_gateway.details_json['phone_number'] if payment_gateway is not None else 'Bkash Send Money Method Not Available Right Now, Try Another Method!'}",
                         "Message": f"Submit Your Phone Number & Transaction ID. Cashout Amount is {invoice.customer_amount}"
                     }
                     # 'invoice': InvoiceSerializer(invoice).data
@@ -280,7 +280,7 @@ class NagadPersonalAgentPaymentView(views.APIView):
                     "status": True,
                     "data": {
                         "Method": f"{payment_method.title()}",
-                        "Cash-out Number": f"{payment_gateway.details_json['phone_number'] if payment_gateway is not None else "Nagad Cashout Method Not Available Right Now, Try Another Method!"}",
+                        "Cash-out Number": f"{payment_gateway.details_json['phone_number'] if payment_gateway is not None else 'Nagad Cashout Method Not Available Right Now, Try Another Method!'}",
                         "Message": f"Submit Your Phone Number & Transaction ID. Cashout Amount is {invoice.customer_amount}"
                     }
                 }, status=status.HTTP_200_OK
@@ -295,7 +295,7 @@ class NagadPersonalAgentPaymentView(views.APIView):
                     "status": True,
                     "data": {
                         "Method": f"{payment_method.title()}",
-                        "Send Money Number": f"{payment_gateway.details_json['phone_number'] if payment_gateway is not None else "Nagad Send Money Method Not Available Right Now, Try Another Method!"}",
+                        "Send Money Number": f"{payment_gateway.details_json['phone_number'] if payment_gateway is not None else 'Nagad Send Money Method Not Available Right Now, Try Another Method!'}",
                         "Message": f"Submit Your Phone Number & Transaction ID. Send Money Amount is {invoice.customer_amount}"
                     }
                 }, status=status.HTTP_200_OK
@@ -438,7 +438,7 @@ class RocketPersonalAgentPaymentView(views.APIView):
                     "status": True,
                     "data": {
                         "Method": f"{payment_method.title()}",
-                        "Cash-out Number": f"{payment_gateway.details_json['phone_number'] if payment_gateway is not None else "Rocket Cashout Method Not Available Right Now, Try Another Method!"}",
+                        "Cash-out Number": f"{payment_gateway.details_json['phone_number'] if payment_gateway is not None else 'Rocket Cashout Method Not Available Right Now, Try Another Method!'}",
                         "Message": f"Submit Your Phone Number & Transaction ID. Cashout Amount is {invoice.customer_amount}"
                     }
                     # 'invoice': InvoiceSerializer(invoice).data
@@ -454,7 +454,7 @@ class RocketPersonalAgentPaymentView(views.APIView):
                     "status": True,
                     "data": {
                         "Method": f"{payment_method.title()}",
-                        "Send Money Number": f"{payment_gateway.details_json['phone_number'] if payment_gateway is not None else "Rocket Send Money Method Not Available Right Now, Try Another Method!"}",
+                        "Send Money Number": f"{payment_gateway.details_json['phone_number'] if payment_gateway is not None else 'Rocket Send Money Method Not Available Right Now, Try Another Method!'}",
                         "Message": f"Submit Your Phone Number & Transaction ID. Send Money Amount is {invoice.customer_amount}"
                     }
                 }, status=status.HTTP_200_OK
