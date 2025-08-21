@@ -1,5 +1,5 @@
 from .serializers import CustomUserSerializer, RegistrationSerializer, MerchantLoginSerializer, AdminLoginSerializer, MerchantRegistrationSerializer, MerchantSerializer, UserSerializer, BasePaymentGateWaySerializer, StorePaymentMessageSerializer, SmsDeviceKeySerializer, APIKeySerializer
-from .models import UserRole, Merchant, BasePaymentGateWay, StorePaymentMessage, SmsDeviceKey, APIKey
+from .models import UserRole, Merchant, BasePaymentGateWay, StorePaymentMessage, SmsDeviceKey, APIKey, CustomUser
 from .utils import CustomTokenObtainPairView, CustomUserCreateAPIView, CustomOnlyAdminCreateViewsetsViews
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 from .permissions import AdminCreatePermission, AdminAllPermission
@@ -12,6 +12,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db.models import QuerySet
 from django.http import Http404
+
+from rest_framework.decorators import api_view, permission_classes
 
 
 # ========================Registration/Account Create Views Start===============================
@@ -213,6 +215,51 @@ class UpdateUserMerchantAPIView(APIView):
             }, status=status.HTTP_200_OK
         )
 
+
+@api_view(["POST"])
+@permission_classes([AdminCreatePermission])
+def userApproval(request, pid):
+    if not request.user.is_authenticated:
+        return Response(
+            {"status": False, "message": "Authentication Failed"}, 
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
+    if request.user.role.name.lower() != 'admin':
+        return Response(
+            {"status": False, "message": "Only admin user approved!"}, 
+            status=status.HTTP_406_NOT_ACCEPTABLE
+        )
+    
+    try:
+        user = CustomUser.objects.get(pid=pid)
+    except CustomUser.DoesNotExist:
+        return Response(
+            {"status": False, "message": "Wrong User Personal ID"}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    status_value = request.data.get("status", "").lower()
+    
+    if status_value not in ['active', 'disable']:
+        return Response(
+            {"status": False, "message": "Wrong status value!"}, 
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if user.status.lower() == status_value:
+        return Response(
+            {"status": True, "message": f"User already {user.status}!"}, 
+            status=status.HTTP_200_OK
+        )
+
+    user.status = status_value.capitalize()
+    user.save()
+
+    return Response(
+        {"status": True, "message": f"User {user.status}!"}, 
+        status=status.HTTP_200_OK
+    )
 
 
 class APIKeyListOrDetailsAPIView(APIView):
