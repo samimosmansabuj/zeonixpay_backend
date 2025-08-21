@@ -24,6 +24,7 @@ class Invoice(models.Model):
     
     invoice_payment_id = models.CharField(max_length=50, editable=False, unique=True)
     data = models.JSONField(blank=True, null=True)
+    callback_url = models.URLField(max_length=255, blank=True, null=True)
     method_payment_id = models.CharField(blank=True, null=True)
     
     customer_order_id = models.CharField(max_length=100, blank=True, null=True)

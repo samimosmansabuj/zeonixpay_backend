@@ -41,8 +41,7 @@ class BKashClient:
             "password": self.password,
             "Content-Type": "application/json"
         }
-        
-        r = requests.post(url, json=data, headers=headers, timeout=30)
+        r = requests.post(url, json=data, headers=headers)
         if r.status_code != 200:
             raise BKashError(f"Grant token failed: {r.status_code} {r.text}")
         body = r.json()
@@ -52,8 +51,8 @@ class BKashClient:
         if not id_token or not refresh_token:
             raise BKashError(f"Bad grant token response: {body}")
 
-        cache.set(BKASH_ID_TOKEN_CACHE_KEY, f"{token_type} {id_token}", BKASH_ID_TOKEN_TTL)
-        cache.set(BKASH_REFRESH_TOKEN_CACHE_KEY, refresh_token, BKASH_REFRESH_TOKEN_TTL)
+        # cache.set(BKASH_ID_TOKEN_CACHE_KEY, f"{token_type} {id_token}", BKASH_ID_TOKEN_TTL)
+        # cache.set(BKASH_REFRESH_TOKEN_CACHE_KEY, refresh_token, BKASH_REFRESH_TOKEN_TTL)
         return f"{token_type} {id_token}"
 
     def _refresh_token(self, refresh_token):
@@ -80,16 +79,16 @@ class BKashClient:
         return f"{token_type} {id_token}"
 
     def _authorization(self):
-        token = cache.get(BKASH_ID_TOKEN_CACHE_KEY)
-        if token:
-            return token
+        # token = cache.get(BKASH_ID_TOKEN_CACHE_KEY)
+        # if token:
+        #     return token
         
-        refresh_token = cache.get(BKASH_REFRESH_TOKEN_CACHE_KEY)
-        if refresh_token:
-            try:
-                return self._refresh_token(refresh_token)
-            except Exception:
-                pass
+        # refresh_token = cache.get(BKASH_REFRESH_TOKEN_CACHE_KEY)
+        # if refresh_token:
+        #     try:
+        #         return self._refresh_token(refresh_token)
+        #     except Exception:
+        #         pass
         return self._grant_token()
 
     def _headers_auth(self):
@@ -113,12 +112,8 @@ class BKashClient:
         }
         if payer_reference:
             payload["payerReference"] = self.product_name if self.product_name is not None else "01770618575"
-            # payload["payerReference"] = "TokenizedCheckout"
         if agreement_id:
             payload["agreementID"] = agreement_id
-
-        print("******* Header Auth: ", self._headers_auth())
-        
         r = requests.post(url, json=payload, headers=self._headers_auth())
         if r.status_code != 200:
             raise BKashError(f"Create payment failed: {r.status_code} {r.text}")
@@ -163,7 +158,6 @@ class BKashClient:
 def get_next_payment_gateway(method):
     gateways = BasePaymentGateWay.objects.filter(method=method, is_active=True).order_by('id')
     if not gateways.exists():
-        print("**********", gateways)
         return None
     
     last_id = cache.get("last_used_bkash_id")
@@ -211,7 +205,6 @@ class BKashCreatePaymentView(views.APIView):
                     'message': 'No Bkash Payment Method Found!'
                 }
             )
-        
         
         invoice.payment_gateway = random_bkash_gateway
         invoice.save(update_fields=["payment_gateway"])
@@ -282,7 +275,8 @@ class BKashCallbackView(views.APIView):
         #     client_callback_url = self.decrypt_data(json.loads(invoice.data))
         # else:
         #     client_callback_url = self.decrypt_data(invoice.data)
-        client_callback_url = invoice.data
+        # client_callback_url = invoice.data
+        client_callback_url = invoice.callback_url
 
         # Success: Payment completed successfully
         if status == "success" and response.get("transactionStatus") == "Completed":
@@ -293,7 +287,7 @@ class BKashCallbackView(views.APIView):
             invoice.save()
             
             query_string = urlencode(response)
-            redirect_url = f"{client_callback_url['success_url' or 'success']}?{query_string}"
+            redirect_url = f"{client_callback_url}?{query_string}" if client_callback_url else None
             # return redirect(redirect_url)
             
             return Response({
@@ -312,7 +306,7 @@ class BKashCallbackView(views.APIView):
                 "status": False,
                 "message": "Payment failed. Please try again.",
                 "Execute API Response": response,
-                'client_callback_url': client_callback_url['failed_url' or 'failed']
+                'client_callback_url': f"{client_callback_url}?{query_string}" if client_callback_url else None
             }, status=400)
         
         # Cancel: Payment was canceled
@@ -323,7 +317,7 @@ class BKashCallbackView(views.APIView):
                 "status": False,
                 "message": "Payment was canceled by the user.",
                 "Execute API Response": response,
-                'client_callback_url': client_callback_url['cancel_url' or 'cancel']
+                'client_callback_url': f"{client_callback_url}?{query_string}" if client_callback_url else None
             }, status=400)
         
         
