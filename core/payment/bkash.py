@@ -9,6 +9,7 @@ from rest_framework.exceptions import NotFound, ValidationError
 from core.utils import DataEncryptDecrypt
 from urllib.parse import urlencode
 from authentication.models import BasePaymentGateWay
+import os
 
 BKASH_ID_TOKEN_CACHE_KEY = "bkash:id_token"
 BKASH_REFRESH_TOKEN_CACHE_KEY = "bkash:refresh_token"
@@ -277,50 +278,66 @@ class BKashCallbackView(views.APIView):
         #     client_callback_url = self.decrypt_data(invoice.data)
         # client_callback_url = invoice.data
         client_callback_url = invoice.callback_url
-
-        # Success: Payment completed successfully
+        query_string = urlencode(response)
+        print(query_string)
+        
         if status == "success" and response.get("transactionStatus") == "Completed":
             invoice.pay_status = "paid"
             invoice.transaction_id = response.get("trxID")
             if not invoice.method:
                 invoice.method = 'bkash'
             invoice.save()
-            
-            query_string = urlencode(response)
-            redirect_url = f"{client_callback_url}?{query_string}" if client_callback_url else None
-            # return redirect(redirect_url)
-            
-            return Response({
-                "status": True,
-                "message": "Payment has been successfully completed.",
-                "Execute API Response": response,
-                'client_callback_url': redirect_url
-            }, status=200)
-        
-        # Failure: Payment failed
+            return redirect(f"{os.getenv("PAYMENT_SITE_BASE_URL")}/success/?{query_string}")
         elif status == "failure":
-            # print(client_callback_url)
             invoice.pay_status = "failed"
             invoice.save()
-            return Response({
-                "status": False,
-                "message": "Payment failed. Please try again.",
-                "Execute API Response": response,
-                'client_callback_url': f"{client_callback_url}?{query_string}" if client_callback_url else None
-            }, status=400)
-        
-        # Cancel: Payment was canceled
+            return redirect(f"{os.getenv("PAYMENT_SITE_BASE_URL")}/success/?{query_string}")
         elif status == "cancel":
             invoice.pay_status = "cancelled"
             invoice.save()
-            return Response({
-                "status": False,
-                "message": "Payment was canceled by the user.",
-                "Execute API Response": response,
-                'client_callback_url': f"{client_callback_url}?{query_string}" if client_callback_url else None
-            }, status=400)
+            return redirect(f"{os.getenv("PAYMENT_SITE_BASE_URL")}/success/?{query_string}")
         
+        # Success: Payment completed successfully
+        # if status == "success" and response.get("transactionStatus") == "Completed":
+        #     invoice.pay_status = "paid"
+        #     invoice.transaction_id = response.get("trxID")
+        #     if not invoice.method:
+        #         invoice.method = 'bkash'
+        #     invoice.save()
+            
+        #     query_string = urlencode(response)
+        #     redirect_url = f"{client_callback_url}?{query_string}" if client_callback_url else None
+        #     # return redirect(redirect_url)
+            
+        #     return Response({
+        #         "status": True,
+        #         "message": "Payment has been successfully completed.",
+        #         "Execute API Response": response,
+        #         'client_callback_url': redirect_url
+        #     }, status=200)
         
+        # # Failure: Payment failed
+        # elif status == "failure":
+        #     # print(client_callback_url)
+        #     invoice.pay_status = "failed"
+        #     invoice.save()
+        #     return Response({
+        #         "status": False,
+        #         "message": "Payment failed. Please try again.",
+        #         "Execute API Response": response,
+        #         'client_callback_url': f"{client_callback_url}?{query_string}" if client_callback_url else None
+        #     }, status=400)
+        
+        # # Cancel: Payment was canceled
+        # elif status == "cancel":
+        #     invoice.pay_status = "cancelled"
+        #     invoice.save()
+        #     return Response({
+        #         "status": False,
+        #         "message": "Payment was canceled by the user.",
+        #         "Execute API Response": response,
+        #         'client_callback_url': f"{client_callback_url}?{query_string}" if client_callback_url else None
+        #     }, status=400)
         
         
         # Unknown status: In case status is something unexpected

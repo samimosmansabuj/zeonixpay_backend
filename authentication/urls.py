@@ -28,8 +28,9 @@ urlpatterns = [
     path('user/profile/', UserProfileView.as_view(), name='user-profile'),
     path('user/profile/merchant/', UserMerchantProfileView.as_view(), name='user-profile-merchant'),
     path('profile/update/', UpdateUserMerchantAPIView.as_view(), name='user-merchant-profile-update'),
-    path("api/keys/", APIKeyListOrDetailsAPIView.as_view(), name="api-key-list"),
-    path("api/keys/<int:pk>/", APIKeyDetailAPIView.as_view(), name="api-key-detail"),
+    path("app/keys/", APIKeyListOrDetailsAPIView.as_view(), name="api-key-list"),
+    path("app/keys/<int:pk>/", APIKeyDetailAPIView.as_view(), name="api-key-detail"),
+    path('user/approved/<str:pid>/', userApproval, name="user-approved"),
     
     
     path('admin/', include(router.urls)),
