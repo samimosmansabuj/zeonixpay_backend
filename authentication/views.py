@@ -1,6 +1,6 @@
-from .serializers import CustomUserSerializer, RegistrationSerializer, MerchantLoginSerializer, AdminLoginSerializer, MerchantRegistrationSerializer, MerchantSerializer, UserSerializer, BasePaymentGateWaySerializer, StorePaymentMessageSerializer, SmsDeviceKeySerializer, APIKeySerializer
+from .serializers import CustomUserSerializer, RegistrationSerializer, MerchantLoginSerializer, AdminLoginSerializer, MerchantRegistrationSerializer, MerchantSerializer, UserSerializer, BasePaymentGateWaySerializer, StorePaymentMessageSerializer, SmsDeviceKeySerializer, APIKeySerializer, MerchantUserListSerializer
 from .models import UserRole, Merchant, BasePaymentGateWay, StorePaymentMessage, SmsDeviceKey, APIKey, CustomUser
-from .utils import CustomTokenObtainPairView, CustomUserCreateAPIView, CustomOnlyAdminCreateViewsetsViews
+from .utils import CustomTokenObtainPairView, CustomUserCreateAPIView, CustomOnlyAdminCreateViewsetsViews, CustomPagenumberpagination, CustomMerchantUserViewsets
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 from .permissions import AdminCreatePermission, AdminAllPermission
 from rest_framework import generics, status, exceptions, viewsets
@@ -12,7 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db.models import QuerySet
 from django.http import Http404
-
+from rest_framework.parsers import MultiPartParser, JSONParser, FormParser
 from rest_framework.decorators import api_view, permission_classes
 
 
@@ -147,71 +147,65 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         return self.request.user
+
     
     def retrieve(self, request, *args, **kwargs):
         response = super().retrieve(request, *args, **kwargs)
         return Response(
-                {
-                    'status': True,
-                    'data': response.data
-                }
-            )
-
-class UserMerchantProfileView(generics.RetrieveUpdateAPIView):
-    serializer_class = MerchantSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_object(self):
-        try:
-            return Merchant.objects.get(user=self.request.user)
-        except Merchant.DoesNotExist:
-            return Response(
-                {
-                    'status': False,
-                    'message': 'Merchant Profile Not Created!'
-                }, status=status.HTTP_404_NOT_FOUND
-            )
+            {
+                'status': True,
+                'data': response.data
+            }, status=status.HTTP_200_OK
+        )
     
-    def retrieve(self, request, *args, **kwargs):
-        if self.request.user.role.name == 'Merchant':
-            response = super().retrieve(request, *args, **kwargs)
-            return Response(
-                    {
-                        'status': True,
-                        'data': response.data
-                    }
-                )
-        else:
+    def put(self, request, *args, **kwargs):
+        try:
+            serializer = CustomUserSerializer(self.get_object(), data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
             return Response(
                 {
-                    'status': False,
-                    'message': 'This is not a merchant account!'
+                    "status": True,
+                    "message": "User Data Successfully Updated!"
+                }, status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response(
+                {
+                    "status": False,
+                    "message": str(e)
                 }, status=status.HTTP_400_BAD_REQUEST
             )
 
-class UpdateUserMerchantAPIView(APIView):
+class OnlyMerchantProfileAPIView(generics.RetrieveUpdateAPIView):
+    serializer_class = MerchantSerializer
     permission_classes = [IsAuthenticated]
     
+    def get_object(self):
+        return self.request.user.merchant if self.request.user.merchant else None
+    
+    def retrieve(self, request, *args, **kwargs):
+        response = super().retrieve(request, *args, **kwargs)
+        return Response(
+            {
+                'status': True,
+                'data': response.data
+            }, status=status.HTTP_200_OK
+        )
+    
+    
     def put(self, request, *args, **kwargs):
-        user = request.user
-        user_serializer = UserSerializer(user, data=request.data.get('user', {}), partial=True)
-        
-        if user_serializer.is_valid():
-            user_serializer.save()
+        merchant = request.user.merchant
+        serializer = MerchantSerializer(merchant, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
         else:
-            return Response(user_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        if hasattr(user, 'merchant') and user.merchant:
-            merchant_serializer = MerchantSerializer(user.merchant, data=request.data.get('merchant', {}), partial=True)
-            if merchant_serializer.is_valid():
-                merchant_serializer.save()
-            else:
-                return Response(merchant_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         return Response(
             {
                 "status": True,
-                "message": "Updated successfully"
+                "message": "Merchant Data Successfully Updated!"
             }, status=status.HTTP_200_OK
         )
 
@@ -258,6 +252,42 @@ def userApproval(request, pid):
 
     return Response(
         {"status": True, "message": f"User {user.status}!"}, 
+        status=status.HTTP_200_OK
+    )
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def userPasswordReset(request, pid=None):
+    if not request.user.is_authenticated:
+        return Response(
+            {"status": False, "message": "Authentication Failed"}, 
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
+    reset_password = request.data.get("reset_password", None)
+    if reset_password is None:
+        return Response(
+            {
+                "status": False,
+                "message": "Reset Password Field is empty!"
+            }, status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    if pid and request.user.role.name.lower() == 'admin':
+        try:
+            user = CustomUser.objects.get(pid=pid)
+        except CustomUser.DoesNotExist:
+            return Response(
+                {"status": False, "message": "Wrong User Personal ID"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+    else:
+        user = request.user
+    
+    user.set_password(reset_password)
+    user.save(update_fields=["password"])
+    return Response(
+        {"status": True, "message": "Password reset successful."},
         status=status.HTTP_200_OK
     )
 
@@ -408,6 +438,42 @@ class APIKeyDetailAPIView(APIView):
             return Response({"status": False, "message": str(e)}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"status": False, "message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+class AdminStaffUserList(CustomMerchantUserViewsets):
+    queryset = CustomUser.objects.filter(role__name="Admin")
+    serializer_class = CustomUserSerializer
+
+class MerchatUserList(CustomMerchantUserViewsets):
+    queryset = CustomUser.objects.filter(role__name="Merchant")
+    serializer_class = MerchantUserListSerializer
+    
+    def update(self, request, *args, **kwargs):
+        try:
+            object = self.get_object()
+            serializer = self.get_serializer(object, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+            return Response(
+                {
+                    'status': True,
+                    'message': self.update_success_message,
+                    'data': serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+        except exceptions.ValidationError as e:
+            detail = getattr(e, "detail", None)
+            def first(err):
+                if isinstance(err, list):
+                    if not err:
+                        return []
+                    return first(err[0]) if any(isinstance(err[0], (dict, list)) for _ in [0]) else str(err[0])
+                if isinstance(err, dict):
+                    return {k: first(v) for k, v in err.items()}
+                return str(err)
+            return Response({'status': False, 'error': first(detail) if detail is not None else {}}, status=status.HTTP_400_BAD_REQUEST)
 
 # ========================================User Merchant Views End==========================
 # ======================================================================================================

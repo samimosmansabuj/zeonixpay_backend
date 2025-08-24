@@ -8,6 +8,9 @@ router.register(r'payment-gateways', BasePaymentGateWayViewSet, basename='paymen
 router.register(r"sms-device-keys", SmsDeviceKeyViewSet, basename="sms-device-key")
 router.register(r"store-payment-messages", StorePaymentMessageViewSet, basename="store-payment-message")
 
+router.register(r"user", AdminStaffUserList, basename="admin-staff-user")
+router.register(r"merchant", MerchatUserList, basename="merchant-user")
+
 
 urlpatterns = [
     # Registration URLs=======================================================================
@@ -26,14 +29,20 @@ urlpatterns = [
     
     # User Profile URL
     path('user/profile/', UserProfileView.as_view(), name='user-profile'),
-    path('user/profile/merchant/', UserMerchantProfileView.as_view(), name='user-profile-merchant'),
-    path('profile/update/', UpdateUserMerchantAPIView.as_view(), name='user-merchant-profile-update'),
+    path('user/merchant-profile/', OnlyMerchantProfileAPIView.as_view(), name='merchant-profile-update'),
+    
+    path('user/approved/<str:pid>/', userApproval, name="user-approved"),
+    path('user/password-reset/', userPasswordReset, name="current-user-password-reset"),
+    path('user/password-reset/<str:pid>/', userPasswordReset, name="user-password-reset"),
+    
+    
     path("app/keys/", APIKeyListOrDetailsAPIView.as_view(), name="api-key-list"),
     path("app/keys/<int:pk>/", APIKeyDetailAPIView.as_view(), name="api-key-detail"),
-    path('user/approved/<str:pid>/', userApproval, name="user-approved"),
+    
     
     
     path('admin/', include(router.urls)),
+    
     path("store-payment-messages/", StorePaymentMessageCreateView.as_view(), name="store-payment-message-create"),
     path("device-verify/", VerifyDeviceKeyAPIView.as_view(), name="device-verify"),
     
