@@ -24,7 +24,12 @@ class CustomUser(AbstractUser):
     more_information = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=10, choices=STATUS, default='Pending')
     role = models.ForeignKey(UserRole, on_delete=models.SET_NULL, blank=True, null=True)
-    pid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    pid = models.CharField(max_length=50, editable=False, unique=True)
+    
+    def save(self, *args, **kwargs):
+        if not self.pid:
+            self.pid = uuid.uuid4().hex
+        return super().save(*args, **kwargs)
     
     def __str__(self):
         return self.username
@@ -235,7 +240,6 @@ class SmsDeviceKey(models.Model):
 
 class StorePaymentMessage(models.Model):
     device = models.ForeignKey(SmsDeviceKey, on_delete=models.SET_NULL, related_name='payment_messages', null=True, blank=True)
-    messager_receiver = models.CharField(max_length=20, blank=True, null=True)
     message_from = models.CharField(max_length=20)
     message = models.TextField(blank=True, null=True)
     payment_number = models.CharField(max_length=20, blank=True, null=True)
@@ -244,21 +248,21 @@ class StorePaymentMessage(models.Model):
     message_date = models.DateTimeField(blank=True, null=True)
     is_verified = models.BooleanField(default=False)
     create_at = models.DateTimeField(auto_now_add=True)
-
-    def extract_message_body(self):
-        if not self.message:
-            return None
-
-        amount_pattern = r"Tk (\d{1,3}(?:,\d{3})*(?:\.\d{2}))"
+    
+    def extract_bkash_message(self):
+        #Extract Amount From Message============
+        amount_pattern = r"Tk (\d{1,3}(?:,\d{3})*(?:\.\d{2})?)"
         amount_match = re.search(amount_pattern, self.message)
         if amount_match:
-            self.message_amount = amount_match.group(1).replace(',', '')  # Remove commas if any
+            self.message_amount = amount_match.group(1).replace(',', '')
         
+        #Extract TrxID From Message============
         trxid_pattern = r"TrxID (\S+)"
         trxid_match = re.search(trxid_pattern, self.message)
         if trxid_match:
             self.trx_id = trxid_match.group(1)
         
+        #Extract Payment number From Message============
         phone_pattern = r"from (\d{11})"
         phone_match = re.search(phone_pattern, self.message)
         if phone_match:
@@ -280,6 +284,49 @@ class StorePaymentMessage(models.Model):
             print("Date not found in message.")
 
         return self.message
+    
+    def extract_nagad_message(self):
+        #Extract Amount From Message============
+        amount_pattern = r"Amount: Tk ([\d,]+(?:\.\d{1,2})?)"
+        amount_match = re.search(amount_pattern, self.message)
+        if amount_match:
+            self.message_amount = amount_match.group(1).replace(',', '')
+        
+        #Extract TrxID From Message============
+        trxid_pattern = r"TxnID: (\S+)"
+        trxid_match = re.search(trxid_pattern, self.message)
+        if trxid_match:
+            self.trx_id = trxid_match.group(1)
+        
+        #Extract Payment number From Message============
+        phone_pattern = r"(?:Customer|Receiver):\s*(\d{11})"
+        phone_match = re.search(phone_pattern, self.message)
+        if phone_match:
+            self.payment_number = phone_match.group(1)
+        
+        #Extract Date From Message============
+        date_pattern = r"(\d{2}/\d{2}/\d{4} \d{2}:\d{2})"
+        date_match = re.search(date_pattern, self.message)
+        if date_match:
+            try:
+                self.message_date = datetime.strptime(date_match.group(1), "%d/%m/%Y %H:%M")
+            except ValueError:
+                print("Date format error.")
+        
+        return self.message
+    
+    
+
+    def extract_message_body(self):
+        if not self.message and not self.message_from:
+            return None
+        
+        if self.message_from.lower() == "bkash":
+            return self.extract_bkash_message()
+        elif self.message_from.lower() == "nagad":
+            return self.extract_nagad_message()
+
+        
 
     def save(self, *args, **kwargs):
         self.extract_message_body()

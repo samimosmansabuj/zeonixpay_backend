@@ -7,7 +7,7 @@ class DeviceUser:
         self.device = device
     @property
     def is_authenticated(self):
-        return True  # DRF permissions rely on this
+        return True
 
 class DeviceAuthentication(BaseAuthentication):
     header_key = "X-Device-Key"

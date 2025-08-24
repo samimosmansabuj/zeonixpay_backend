@@ -247,7 +247,7 @@ class SmsDeviceKeyAdmin(admin.ModelAdmin):
 
 @admin.register(StorePaymentMessage)
 class StorePaymentMessageAdmin(admin.ModelAdmin):
-    list_display = ("id", 'device', "payment_number", "message", "message_date", "create_at")
+    list_display = ("message_from", "message", "trx_id", "message_amount", "payment_number", "message_date", "is_verified", "create_at")
     list_filter = ("message_date", "device", "create_at")
     search_fields = ("payment_number", "device__device_name", "message")
     ordering = ("-create_at",)

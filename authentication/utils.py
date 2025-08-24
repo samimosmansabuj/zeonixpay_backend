@@ -5,13 +5,41 @@ from rest_framework.exceptions import ValidationError, NotFound
 from .permissions import IsOwnerByUser, AdminAllPermission
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.generics import CreateAPIView
-from rest_framework import serializers, viewsets
+from rest_framework import serializers, viewsets, exceptions
 from django.contrib.auth import authenticate
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
 from .models import CustomUser
 import random, string
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.parsers import MultiPartParser, JSONParser, FormParser
+
+
+class CustomPagenumberpagination(PageNumberPagination):
+    page_size = 2
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+    
+    def paginate_queryset(self, queryset, request, view=None):
+        all_items = request.query_params.get('all', 'false').lower() == 'true'
+        page_size = request.query_params.get(self.page_size_query_param)
+        if all_items or (page_size and page_size.isdigit() and int(page_size) == 0):
+            self.all_data = queryset
+            return None
+        return super().paginate_queryset(queryset, request, view)
+    
+    def get_paginated_response(self, data):
+        return Response(
+            {
+                'status': True,
+                'count': self.page.paginator.count,
+                'next': self.get_next_link(),
+                'previous': self.get_previous_link(),
+                'data': data
+            }, status=status.HTTP_200_OK
+        )
+
 
 # ========================Authentication Token utils Start=============================
 class CustomLoginSerializer(serializers.Serializer):
@@ -111,104 +139,102 @@ class CustomUserCreateAPIView(CreateAPIView):
 
 
 class CustomMerchantUserViewsets(viewsets.ModelViewSet):
-    permission_classes = [IsOwnerByUser]
-    pagination_class = None
+    permission_classes = [AdminAllPermission]
+    pagination_class = CustomPagenumberpagination
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+    lookup_field = "pid"
     
-    model = None
-    create_success_message = "Created!"
-    update_success_message = "Updated!"
-    delete_success_message = "Deleted!"
-    not_found_message = "Object Not Found!"
+    update_success_message = "User Profile Updated!"
+    delete_success_message = "User Profile Deleted!"
+    not_found_message = "User Profile Object Not Found!"
     
-    #----------User-----------------------------------
-    def get_user(self):
-        pid = self.kwargs.get('pid')
-        try:
-            user = CustomUser.objects.get(pid=pid)
-        except CustomUser.DoesNotExist:
-            user = None
-        return user
-    
-    #-------------Object Queryset-----------------------
-    def get_queryset(self):
-        user = self.get_user()
-        if user:
-            return self.model.objects.filter(user=user)
-        return self.model.objects.none()
-    
-    #-------------Created-------------------------------
-    def create(self, request, *args, **kwargs):
-        try:
-            serializer = self.get_serializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            self.perform_create(serializer)
-            return Response(
-                {
-                    'status': True,
-                    'message': self.create_success_message,
-                    'data': serializer.data
-                }, status=status.HTTP_201_CREATED
-            )
-        except ValidationError:
-            error = {key: str(value[0]) for key, value in serializer.errors.items()}
-            return Response(
-                {
-                    'status': False,
-                    'error': error
-                },status=status.HTTP_400_BAD_REQUEST
-            )
-        except Exception as e:
-            return Response(
-                {
-                    'status': False,
-                    'error': str(e)
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-    
-    def perform_create(self, serializer):
-        user = self.request.user
-        serializer.save(user=user)
-    
-    
-    #-------------------Queryset List-------------------
-    def list(self, request, *args, **kwargs):
-        try:
-            response = super().list(request, *args, **kwargs).data
-            return Response(
-                {
-                    'status': True,
-                    'count': len(response),
-                    'data': response
-                }, status=status.HTTP_200_OK
-            )
-        except Exception as e:
-            return Response(
-                {
-                    'status': False,
-                    'error': str(e)
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
     def get_object(self):
         try:
-            query_set = self.get_queryset()
-            return query_set.get(pk=self.kwargs.get('pk'))
-        except self.model.DoesNotExist:
-            raise NotFound({
-                'status': False,
-                'message': self.not_found_message
-            })
+            return CustomUser.objects.get(pid=self.kwargs.get("pid"))
+        except CustomUser.DoesNotExist:
+            raise exceptions.NotFound("User not Found with this PID")
+    
+    def list(self, request, *args, **kwargs):
+        all_items = request.query_params.get('all', 'false').lower() == 'true'
+        page_size = request.query_params.get(self.pagination_class.page_size_query_param)
+        
+        if all_items or (page_size and page_size.isdigit() and int(page_size)==0):
+            try:
+                response = self.get_serializer(self.get_queryset(), many=True)
+                return Response(
+                    {
+                        'status': True,
+                        'count': len(response.data),
+                        'data': response.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+            except Exception as e:
+                return Response(
+                    {
+                        'status': False,
+                        'error': str(e)
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+        
+        page = self.paginate_queryset(self.get_queryset())
+        if page is not None:
+            response = self.get_serializer(page, many=True)
+            return Response(
+                {
+                    'status': True,
+                    'count': self.paginator.page.paginator.count,
+                    'next': self.paginator.get_next_link(),
+                    'previous': self.paginator.get_previous_link(),
+                    'data': response.data
+                },
+                status=status.HTTP_200_OK
+            )
+        else:
+            try:
+                response = self.get_serializer(self.get_queryset(), many=True)
+                return Response(
+                    {
+                        'status': True,
+                        'count': len(response.data),
+                        'data': response.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+            except Exception as e:
+                return Response(
+                    {
+                        'status': False,
+                        'error': str(e)
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
     
     def retrieve(self, request, *args, **kwargs):
-        instance = self.get_object()
-        return Response(
-            {
-                'status': True,
-                'data': self.get_serializer(instance).data
-            }, status=status.HTTP_200_OK
-        )
+        try:
+            instance = self.get_object()
+            return Response(
+                {
+                    "status": True,
+                    "message": self.get_serializer(instance).data
+                }, status=status.HTTP_200_OK
+            )
+        except exceptions.NotFound as e:
+            return Response(
+                {
+                    "status": False,
+                    "message": str(e)
+                }, status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {
+                    "status": False,
+                    "message": str(e)
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
-
     def update(self, request, *args, **kwargs):
         try:
             object = self.get_object()
@@ -223,7 +249,7 @@ class CustomMerchantUserViewsets(viewsets.ModelViewSet):
                 },
                 status=status.HTTP_200_OK
             )
-        except ValidationError:
+        except ValidationError as e:
             error = {key: str(value[0]) for key, value in serializer.errors.items()}
             return Response(
                 {

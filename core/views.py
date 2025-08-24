@@ -222,6 +222,7 @@ class GetOnlinePayment(views.APIView):
     
     def get(self, request, *args, **kwargs):
         invoice_payment_id = request.GET.get('invoice_payment_id')
+        print(invoice_payment_id)
         if not invoice_payment_id:
             return Response({
                 'status': False,

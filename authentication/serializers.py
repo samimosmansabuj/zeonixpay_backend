@@ -3,6 +3,7 @@ from django.contrib.auth.hashers import make_password
 from .utils import CustomLoginSerializer
 from rest_framework import serializers
 from django.db import transaction
+from rest_framework.exceptions import ValidationError
 
 
 # ========================Authentication Token Serializer Start================================
@@ -129,27 +130,15 @@ class MerchantRegistrationSerializer(serializers.ModelSerializer):
 
 # ========================Registration/Account Create Serializer End=============================
 
-
-
-
-# ========================Important Base Serializer Start=============================
-class UserRoleSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = UserRole
-        fields = '__all__'
-
-class CustomUserSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CustomUser
-        fields = ['id', 'username', 'first_name', 'last_name', 'email', 'phone_number', 'status', 'role', 'pid']
+        
 
 
 # ======================================================================================================
 # ========================================User Merchant Serializers Start=======================
-class MerchantSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Merchant
-        fields = '__all__'
+# class MerchantSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = Merchant
+#         fields = '__all__'
 
 class MerchantWalletSerializer(serializers.ModelSerializer):
     class Meta:
@@ -185,7 +174,6 @@ class BasePaymentGateWaySerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ['method_uuid', 'created_at', 'updated_at']
 
-
 class SmsDeviceKeySerializer(serializers.ModelSerializer):
     class Meta:
         model = SmsDeviceKey
@@ -217,4 +205,65 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
         fields = ['first_name', 'phone_number', 'more_information', 'status', 'role']
+
+
+
+# ========================Important Base Serializer Start=============================
+class UserRoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserRole
+        fields = '__all__'
+
+class CustomUserSerializer(serializers.ModelSerializer):
+    role = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = CustomUser
+        fields = ['id', 'username', 'first_name', 'last_name', 'email', 'phone_number', 'status', 'role', 'pid']
+    
+    def get_role(self, obj):
+        return obj.role.name if obj.role else None
+
+class MerchantUserListSerializer(serializers.ModelSerializer):
+    role = serializers.SerializerMethodField()
+    merchant = MerchantSerializer(required=False, allow_null=True)
+    
+    class Meta:
+        model = CustomUser
+        fields = ['id', 'username', 'first_name', 'last_name', 'email', 'phone_number', 'status', 'role', 'pid', 'merchant']
+        depth = 1
+    
+    def get_role(self, obj):
+        return obj.role.name if obj.role else None
+    
+    def update(self, instance, validated_data):
+        merchant_data = validated_data.pop("merchant", None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        request = self.context.get("request")
+        
+        if merchant_data is not None:
+            if not hasattr(instance, "merchant") or instance.merchant is None:
+                raise ValidationError({"merchant": "Merchant profile does not exist for this user."})
+            
+            uploaded_logo = None
+            if request and hasattr(request, "FILES"):
+                uploaded_logo = request.FILES.get("merchant.brand_logo") or request.FILES.get("brand_logo")
+            if uploaded_logo is not None:
+                merchant_data["brand_logo"] = uploaded_logo
+
+            m_serializer = MerchantSerializer(
+                instance.merchant,
+                data=merchant_data,
+                partial=True
+            )
+            m_serializer.is_valid(raise_exception=True)
+            m_serializer.save()
+        
+        return instance
+        
+        # return super().update(instance, validated_data)
+
 
