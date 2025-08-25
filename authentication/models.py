@@ -61,7 +61,7 @@ def create_user_ids(sender, instance, created, **kwargs):
 # ========================================User Merchant Model Start===================================
 class Merchant(models.Model):
     user = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='merchant')
-    merchant_id = models.CharField(max_length=100, default=uuid.uuid4, editable=False, unique=True)
+    merchant_id = models.CharField(max_length=100, editable=False, unique=True)
     
     brand_name = models.CharField(max_length=50)
     whatsapp_number = models.CharField(max_length=14, blank=True, null=True)
