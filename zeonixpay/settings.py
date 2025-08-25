@@ -129,6 +129,9 @@ WSGI_APPLICATION = 'zeonixpay.wsgi.application'
 #     }
 # }
 
+import pymysql
+pymysql.install_as_MySQLdb()
+
 ENGINE_MAP = {
     "sqlite": "django.db.backends.sqlite3",
     "postgres": "django.db.backends.postgresql",
