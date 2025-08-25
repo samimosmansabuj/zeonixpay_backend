@@ -116,10 +116,19 @@ class APIKey(models.Model):
 
 class MerchantWallet(models.Model):
     merchant = models.OneToOneField(Merchant, on_delete=models.CASCADE, related_name='merchant_wallet')
-    wallet_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    wallet_id = models.CharField(max_length=250, editable=False, unique=True)
     balance = models.DecimalField(max_digits=9, decimal_places=2, default=0)
     withdraw_processing = models.DecimalField(max_digits=9, decimal_places=2, default=0)
     total_withdraw = models.DecimalField(max_digits=9, decimal_places=2, default=0)
+    
+    @property
+    def available_balance(self):
+        return (self.balance or 0) - (self.withdraw_processing or 0)
+    
+    def save(self, *args, **kwargs):
+        if not self.wallet_id:
+            self.wallet_id = uuid.uuid4().hex
+        return super().save(*args, **kwargs)
     
     def __str__(self):
         return f"{self.merchant.brand_name} Merchant Wallet Model"
@@ -315,16 +324,53 @@ class StorePaymentMessage(models.Model):
         
         return self.message
     
-    
+    def extract_rocket_message(self):
+        #Extract Amount From Message============
+        amount_pattern = r"Tk([\d,]+(?:\.\d{1,2})?)"
+        amount_match = re.search(amount_pattern, self.message)
+        if amount_match:
+            self.message_amount = amount_match.group(1).replace(',', '')
+
+        #Extract TrxID From Message============
+        trxid_pattern = r"TxnId:(\S+)"
+        trxid_match = re.search(trxid_pattern, self.message)
+        if trxid_match:
+            self.trx_id = trxid_match.group(1)
+        
+        #Extract Payment number From Message============
+        # phone_pattern = r"from (\d{11})"
+        phone_pattern = r"from (\S+)"
+        phone_match = re.search(phone_pattern, self.message)
+        if phone_match:
+            self.payment_number = phone_match.group(1)
+        
+        #Extract Date From Message============
+        date_pattern = r"Date\s*:\s*(\d{1,2})-([A-Za-z]{3})-(\d{2,4})\s+(\d{1,2}:\d{2}(?::\d{2})?)\s*([ap]m)\.?"
+        date_match = re.search(date_pattern, self.message)
+        if date_match:
+            day, mon, year, timestr, ampm = date_match.groups()
+            mon = mon.title(); ampm = ampm.upper()
+            datestr = f"{day}-{mon}-{year} {timestr} {ampm}"
+            has_seconds = timestr.count(':') == 2
+            year_fmt = "%Y" if len(year) == 4 else "%y"
+            time_fmt = "%I:%M:%S" if has_seconds else "%I:%M"
+            fmt = f"%d-%b-{year_fmt} {time_fmt} %p"
+            try:
+                self.message_date = datetime.strptime(datestr, fmt)
+            except ValueError:
+                print("Date format error.")
+        
+        return self.message
 
     def extract_message_body(self):
         if not self.message and not self.message_from:
             return None
-        
         if self.message_from.lower() == "bkash":
             return self.extract_bkash_message()
         elif self.message_from.lower() == "nagad":
             return self.extract_nagad_message()
+        elif self.message_from.lower() == "16216":
+            return self.extract_rocket_message()
 
         
 
@@ -335,4 +381,14 @@ class StorePaymentMessage(models.Model):
 
 # ===============Site Payment Gate, And Payment Message Store and Device Management End==========
 # ======================================================================================================
+
+
+
+
+
+
+class URLConfiguration(models.Model):
+    api_base_url = models.URLField(blank=True, null=True, max_length=255)
+    payment_site_base_url = models.URLField(blank=True, null=True, max_length=255)
+    frontend_base_url = models.URLField(blank=True, null=True, max_length=255)
 

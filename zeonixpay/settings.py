@@ -28,7 +28,7 @@ INSTALLED_APPS = [
     'corsheaders', 'django_extensions', 'django_filters',
     'rest_framework_simplejwt.token_blacklist',
     
-    "authentication", "core",
+    "authentication", "core", "api_sendbox"
 ]
 
 MIDDLEWARE = [

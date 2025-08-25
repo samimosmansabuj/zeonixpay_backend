@@ -272,14 +272,8 @@ class BKashCallbackView(views.APIView):
             return Response({"status": False, "message": str(e)}, status=502)
         
         
-        # if type(invoice.data) is str:
-        #     client_callback_url = self.decrypt_data(json.loads(invoice.data))
-        # else:
-        #     client_callback_url = self.decrypt_data(invoice.data)
-        # client_callback_url = invoice.data
         client_callback_url = invoice.callback_url
         query_string = urlencode(response)
-        print(query_string)
         
         if status == "success" and response.get("transactionStatus") == "Completed":
             invoice.pay_status = "paid"
