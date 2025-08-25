@@ -31,6 +31,10 @@ urlpatterns = [
     
     
     
+    #API For Payment m2m=================/API key & Secret Key Verify/===========
+    path('payment/create/', CreatePayment.as_view(), name='create-payment'),
+    path('payment/payout/', PaymentPayOutView.as_view(), name='payment-payout'),
+    # ---------------------------SendBox-------------------------------------
     
     #API For Payment m2m=================/Not Authentication Needed/===========
     path('get-payment/', GetOnlinePayment.as_view(), name='get-payment'),
@@ -44,16 +48,5 @@ urlpatterns = [
     path('get-payment/nagad-payment/', NagadPersonalAgentPaymentView.as_view(), name='nagad-manual-payment'),
     path('get-payment/rocket-payment/', RocketPersonalAgentPaymentView.as_view(), name='rocket-manual-payment'),
     
-    
-    #API For Payment m2m=================/API key & Secret Key Verify/===========
-    path('payment/create/', CreatePayment.as_view(), name='create-payment'),
-    path('payment/payout/', PaymentPayOutView.as_view(), name='payment-payout'),
-    
-    
-    
-    # path('bkash-grant-token/', bkash_grant_token, name='bkash-grant-token')
-    
-    
-    # path('payment/bkash/callback/', BkashExecutePaymentView.as_view(), name='bkash-callback'),
 ]
 

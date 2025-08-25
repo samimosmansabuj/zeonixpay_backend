@@ -1,9 +1,10 @@
 from authentication.models import CustomUser, Merchant, APIKey, MerchantWallet, UserPaymentMethod, BasePaymentGateWay
-from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.fields import GenericForeignKey, GenericRelation
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 import uuid, random, string
+from decimal import Decimal
 
 
 # ============================================Invoice/Cash In Start=======================================
@@ -131,7 +132,18 @@ class PaymentTransfer(models.Model):
     status = models.CharField(choices=STATUS, default='pending', max_length=10)
     created_at = models.DateTimeField(auto_now_add=True)
     
+    transaction_rel = GenericRelation(
+        'WalletTransaction',
+        content_type_field='content_type',
+        object_id_field='object_id',
+        related_query_name='withdraw'
+    )
+    
     ALLOWED_WHEN_PAID = frozenset(('trx_id', 'status'))
+    
+    @property
+    def wallet_transaction(self):
+        return self.transaction_rel.first()
     
     def edit_restricted_method(self):
         if not self.pk:
@@ -172,18 +184,30 @@ class PaymentTransfer(models.Model):
         if self.trx_id and self.status == 'pending':
             self.status = 'success'
         
-        if self.status.lower() == 'success' and self.trx_id:
-            WalletTransaction.objects.create(
-                wallet = self.merchant.merchant_wallet,
-                merchant = self.merchant,
-                service = self,
-                amount = self.amount,
-                method = self.payment_method,
-                status='success',
-                trx_id=self.trx_id,
-                tran_type='debit'
-            )
-        return super().save(*args, **kwargs)
+        ret = super().save(*args, **kwargs)
+        self._sync_wallet_transaction()
+        return ret
+    
+    def _sync_wallet_transaction(self):
+        ct = ContentType.objects.get_for_model(self.__class__)
+        
+        defaults = {
+            'wallet':   self.merchant.merchant_wallet,
+            'merchant': self.merchant,
+            'amount':   self.amount,
+            'method':   getattr(self.payment_method, 'method_type', None),
+            'status':   'success' if str(self.status).lower() == 'success' and self.trx_id else 'pending',
+            'trx_id':   self.trx_id,
+        }
+        
+        WalletTransaction.objects.update_or_create(
+            wallet = self.merchant.merchant_wallet,
+            merchant = self.merchant,
+            content_type=ct,
+            object_id=self.pk,
+            tran_type = 'debit',
+            defaults=defaults
+        )
 
 # ===================================Payment Transfer/Refund/Cash Out End==============================
 
@@ -204,6 +228,17 @@ class WithdrawRequest(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    transaction_rel = GenericRelation(
+        'WalletTransaction',
+        content_type_field='content_type',
+        object_id_field='object_id',
+        related_query_name='withdraw'
+    )
+    
+    @property
+    def wallet_transaction(self):
+        return self.transaction_rel.first()
+    
     def edit_restricted_method(self):
         if not self.pk:
             return
@@ -222,8 +257,8 @@ class WithdrawRequest(models.Model):
     def save(self, *args, **kwargs):
         self.edit_restricted_method()
         
-        if self.verify_withdraw_amount() is False:
-            raise ValidationError("Withdraw amount less then your Wallet balance.")
+        if not self.pk and self.verify_withdraw_amount() is False:
+            raise ValidationError("Withdraw amount exceeds your wallet balance.")
         
         if not self.trx_uuid:
             self.trx_uuid = uuid.uuid4().hex
@@ -231,20 +266,39 @@ class WithdrawRequest(models.Model):
         
         if self.trx_id and self.status == 'pending':
             self.status = 'success'
+        
+        ret = super().save(*args, **kwargs)
+        self._sync_wallet_transaction()
+        return ret
 
-        if self.status.lower() == 'success' and self.trx_id:
-            WalletTransaction.objects.create(
-                wallet = self.merchant.merchant_wallet,
-                merchant = self.merchant,
-                service = self,
-                amount = self.amount,
-                method = self.payment_method.method_type,
-                status='success',
-                trx_id=self.trx_id,
-                tran_type='debit'
-            )
-        return super().save(*args, **kwargs)
-
+    def _sync_wallet_transaction(self):
+        ct = ContentType.objects.get_for_model(self.__class__)
+        
+        if str(self.status).lower() == "rejected":
+            status__ = "failed"
+        elif str(self.status).lower() == "pending" and self.trx_id is None:
+            status__ = "pending"
+        else:
+            status__ = "success"
+        
+        defaults = {
+            'wallet':   self.merchant.merchant_wallet,
+            'merchant': self.merchant,
+            'amount':   self.amount,
+            'method':   getattr(self.payment_method, 'method_type', None),
+            'status':   status__,
+            'trx_id':   self.trx_id,
+        }
+        
+        WalletTransaction.objects.update_or_create(
+            wallet = self.merchant.merchant_wallet,
+            merchant = self.merchant,
+            content_type=ct,
+            object_id=self.pk,
+            tran_type = 'debit',
+            defaults=defaults
+        )
+    
 # ======================================Withdraw Request/Cash Out End=================================
 
 
@@ -271,7 +325,17 @@ class WalletTransaction(models.Model):
     trx_id = models.CharField(max_length=50, null=True, blank=True)
     trx_uuid = models.CharField(max_length=50, editable=False, unique=True)
     tran_type = models.CharField(max_length=20, choices=(('debit', 'Debit'), ('credit', 'Credit')))
-    
+        
+    def _as_decimal(self, v):
+        return Decimal(str(v or '0'))
+
+    def _get_original(self):
+        if not self.pk:
+            return None
+        try:
+            return type(self).objects.get(pk=self.pk)
+        except type(self).DoesNotExist:
+            return None
     
     def edit_restricted_method(self):
         if not self.pk:
@@ -294,32 +358,113 @@ class WalletTransaction(models.Model):
             self.ip_address = ip
     
     def fees_disbursement(self):
-        self.fee = self.amount * 10/100
+        fees_type = getattr(self.merchant, 'fees_type', None)
+        fees_amount = self._as_decimal(getattr(self.merchant, 'fees', 0))
+        
+        if fees_type == "Parcentage":
+            self.fee = (self.amount * fees_amount) / Decimal('100')
+        elif fees_type == "Flat":
+            self.fee = fees_amount
+        else:
+            self.fee = (self.amount * Decimal('10')) / Decimal('100')
         self.net_amount = self.amount - self.fee
     
+    @transaction.atomic
     def save(self, *args, **kwargs):
-        self.edit_restricted_method()
-        
-        self.save_user_ip_address(kwargs.pop('request', None))
-        
         if not self.trx_uuid:
             self.trx_uuid = uuid.uuid4().hex
         
+        self.edit_restricted_method()
+        self.save_user_ip_address(kwargs.pop('request', None))
+        
+        original = self._get_original()
+        prev_status = (original.status.lower() if original and original.status else None)
+        prev_amount = (self._as_decimal(original.amount) if original else None)
+        prev_tran   = (original.tran_type.lower() if original and original.tran_type else None)
+        
+        new_status = (self.status or '').lower()
+        new_tran   = (self.tran_type or '').lower()
+        
         wallet = self.wallet
+        if not wallet:
+            raise ValidationError("Wallet is required for a transaction.")
+        old_balance = wallet.balance
+        
+        # ---------- FEES ----------
         self.fees_disbursement()
-        if self.status.lower() == 'success':
-            self.previous_balance = wallet.balance
+        
+        
+        # ---------- STATE TRANSITIONS (debit case) ----------
+        if new_tran == 'debit':
+            if not original:
+                if new_status == 'pending':
+                    print(wallet.balance)
+                    if wallet.balance < self.amount:
+                        raise ValidationError("Insufficient available balance to place a pending hold.")
+                    wallet.balance -= self.amount
+                    wallet.withdraw_processing += self.amount
+
+                elif new_status == 'success':
+                    if wallet.balance < self.amount:
+                        raise ValidationError("Insufficient balance for successful debit.")
+                    wallet.balance -= self.amount
+                    wallet.total_withdraw += self.amount
+
+                elif new_status == 'failed':
+                    pass
+            else:
+                if prev_status == 'pending':
+                    if new_status == 'pending':
+                        diff = (self.amount - prev_amount)
+                        if diff > 0 and wallet.available_balance < diff:
+                            raise ValidationError("Insufficient available balance to increase pending hold.")
+                        wallet.balance -= diff
+                        wallet.withdraw_processing += diff
+
+                    elif new_status == 'success':
+                        if self.amount != prev_amount:
+                            raise ValidationError("Amount cannot change when finalizing to success. Cancel & recreate.")
+                        wallet.withdraw_processing -= prev_amount
+                        wallet.total_withdraw += prev_amount
+
+                    elif new_status == 'failed':
+                        wallet.withdraw_processing -= prev_amount
+                        wallet.balance += prev_amount
+                        
+
+                elif prev_status in ('success', 'failed'):
+                    raise ValidationError(f"Cannot update a {prev_status} transaction.")
+
+                elif prev_status is None:
+                    pass
             
-            if self.tran_type.lower() == 'debit':
-                wallet.balance -= self.amount
-                wallet.total_withdraw += self.amount
-            elif self.tran_type.lower() == 'credit':
-                wallet.balance += self.amount
             wallet.save()
-            
-            self.current_balance = wallet.balance
+        
+        # ---------- CREDIT case ----------
+        elif new_tran == 'credit':
+            if not original:
+                if new_status == 'success':
+                    wallet.balance += self.amount
+                    wallet.save()
+            else:
+                if prev_status == 'pending' and new_status == 'success':
+                    wallet.balance += self.amount
+                    wallet.save()
+                elif prev_status in ('success', 'failed'):
+                    raise ValidationError(f"Cannot update a {prev_status} transaction.")
+
+        self.previous_balance = old_balance
+        self.current_balance  = wallet.balance
+        
         
         return super().save(*args, **kwargs)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['content_type', 'object_id'], name='uniq_wallet_txn_per_service')
+        ]
+        indexes = [
+            models.Index(fields=['content_type', 'object_id']),
+        ]
 # ========================================Wallet Transaction End===================================
 

@@ -62,7 +62,6 @@ class CustomPagenumberpagination(PageNumberPagination):
 
 class CustomPaymentSectionViewsets(viewsets.ModelViewSet):
     permission_classes = [IsOwnerByUser]
-    # pagination_class = None
     pagination_class = CustomPagenumberpagination
     
     model = None
@@ -301,5 +300,22 @@ class CustomPaymentSectionViewsets(viewsets.ModelViewSet):
         return f"This Invoice Can't Delete!", None
 
 
+
+
+def build_logo_url(request, brand_logo):
+    if not brand_logo:
+        return None
+
+    url_attr = getattr(brand_logo, 'url', None)
+    try:
+        if url_attr:
+            return request.build_absolute_uri(brand_logo.url)
+    except Exception:
+        pass
+
+    from django.conf import settings
+    path_str = str(brand_logo).lstrip('/')
+    media_url = getattr(settings, 'MEDIA_URL', '/media/')
+    return request.build_absolute_uri(f"{media_url.rstrip('/')}/{path_str}")
 
 

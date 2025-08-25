@@ -20,6 +20,7 @@ urlpatterns = [
     path('api/v1/', home, name='home'),
     path('api/v1/', include('authentication.urls')),
     path('api/v1/', include('core.urls')),
+    path('api/v1/sendbox/', include('api_sendbox.urls')),
 ]
 
 if settings.DEBUG:
