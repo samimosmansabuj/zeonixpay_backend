@@ -19,7 +19,7 @@ class SendBoxInvoice(models.Model):
     
     invoice_payment_id = models.CharField(max_length=50, editable=False, unique=True)
     callback_url = models.URLField(max_length=255, blank=True, null=True)
-    method_payment_id = models.CharField(blank=True, null=True)
+    method_payment_id = models.CharField(blank=True, null=True, max_length=100)
     
     customer_order_id = models.CharField(max_length=100, blank=True, null=True)
     customer_name = models.CharField(max_length=100)
@@ -33,8 +33,8 @@ class SendBoxInvoice(models.Model):
     status = models.CharField(max_length=15, choices=STATUS, default='active')
     pay_status = models.CharField(max_length=15, choices=PAYMENT_STATUS, default='pending')
     
-    transaction_id = models.CharField(blank=True, null=True)
-    invoice_trxn = models.CharField(blank=True, null=True)
+    transaction_id = models.CharField(blank=True, null=True, max_length=64)
+    invoice_trxn = models.CharField(blank=True, null=True, max_length=64)
     
     extras = models.TextField(blank=True, null=True)
     
