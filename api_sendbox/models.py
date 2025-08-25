@@ -26,7 +26,7 @@ class SendBoxInvoice(models.Model):
     customer_number = models.CharField(max_length=14)
     customer_amount = models.DecimalField(max_digits=6, decimal_places=2)
     customer_email = models.EmailField(max_length=200, blank=True, null=True)
-    customer_address = models.CharField(blank=True, null=True)
+    customer_address = models.CharField(blank=True, null=True, max_length=250)
     customer_description = models.TextField(blank=True, null=True)
     method = models.CharField(max_length=50, blank=True, null=True)
     
