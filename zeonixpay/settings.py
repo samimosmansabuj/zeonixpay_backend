@@ -122,10 +122,29 @@ WSGI_APPLICATION = 'zeonixpay.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
+#     }
+# }
+
+ENGINE_MAP = {
+    "sqlite": "django.db.backends.sqlite3",
+    "postgres": "django.db.backends.postgresql",
+    "mysql": "django.db.backends.mysql",
+}
+DB_ENGINE = os.getenv("DB_ENGINE", "sqlite").lower()
+DB_NAME = BASE_DIR / os.getenv("DATABASE_NAME", "db.sqlite3") if DB_ENGINE == "sqlite" else os.getenv("DATABASE_NAME")
+
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+    "default": {
+        "ENGINE": ENGINE_MAP.get(DB_ENGINE, "django.db.backends.sqlite3"),
+        "NAME": DB_NAME,
+        "USER": os.getenv("DB_USER", ""),
+        "PASSWORD": os.getenv("DB_PASSWORD", ""),
+        "HOST": os.getenv("DB_HOST", ""),
+        "PORT": os.getenv("DB_PORT", ""),
     }
 }
 

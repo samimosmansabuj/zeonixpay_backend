@@ -39,7 +39,7 @@ class CreatePayment(views.APIView):
         # if not merchant.check_secret(secret_key):
         #     raise AuthenticationFailed("Invalid SECRET-KEY.")
         
-        self._check_domain(request, api_key.merchant)
+        # self._check_domain(request, api_key.merchant)
 
         return api_key.merchant
         
@@ -54,12 +54,12 @@ class CreatePayment(views.APIView):
         post_data['data'] = json.dumps(encrypt_data_json)
         return post_data
     
-    def _check_domain(self, request, merchant):
-        request_domain = request.META.get('HTTP_HOST', '').lower()
-        allowed_domains = merchant.domain_name if isinstance(merchant.domain_name, list) else [merchant.domain_name]
+    # def _check_domain(self, request, merchant):
+    #     request_domain = request.META.get('HTTP_HOST', '').lower()
+    #     allowed_domains = merchant.domain_name if isinstance(merchant.domain_name, list) else [merchant.domain_name]
         
-        if not any(request_domain.endswith(allowed_domain) for allowed_domain in allowed_domains):
-            raise AuthenticationFailed(f"Access denied from domain {request_domain}.")
+    #     if not any(request_domain.endswith(allowed_domain) for allowed_domain in allowed_domains):
+    #         raise AuthenticationFailed(f"Access denied from domain {request_domain}.")
     
     def post(self, request, *args, **kwargs):
         try:
