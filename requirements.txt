@@ -11,6 +11,7 @@ djangorestframework==3.16.1
 djangorestframework_simplejwt==5.5.1
 dotenv==0.9.9
 idna==3.10
+mysqlclient==2.2.7
 pillow==11.3.0
 pycparser==2.22
 PyJWT==2.10.1
