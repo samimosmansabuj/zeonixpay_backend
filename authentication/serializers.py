@@ -135,11 +135,6 @@ class MerchantRegistrationSerializer(serializers.ModelSerializer):
 
 # ======================================================================================================
 # ========================================User Merchant Serializers Start=======================
-# class MerchantSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = Merchant
-#         fields = '__all__'
-
 class MerchantWalletSerializer(serializers.ModelSerializer):
     class Meta:
         model = MerchantWallet
@@ -184,7 +179,6 @@ class SmsDeviceKeySerializer(serializers.ModelSerializer):
         }
 
 class StorePaymentMessageSerializer(serializers.ModelSerializer):
-    messager_receiver = serializers.CharField(required=True, error_messages={'required': 'Message receiver number required!'})
     class Meta:
         model = StorePaymentMessage
         fields = "__all__"
