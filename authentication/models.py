@@ -73,15 +73,15 @@ class Merchant(models.Model):
     is_active = models.BooleanField(default=True)
     
     def genereate_merchant_id(self):
-        unique = False
-        while not unique:
+        # unique = False
+        while True:
             merchant_id = ''.join(random.choices(string.digits, k=6))
             if not Merchant.objects.filter(merchant_id=merchant_id).exists():
-                unique = True
+                # unique = True
                 return merchant_id
     
     def save(self, *args, **kwargs):
-        if self.merchant_id:
+        if not self.merchant_id:
             self.merchant_id = self.genereate_merchant_id()
         return super().save(*args, **kwargs)
     
