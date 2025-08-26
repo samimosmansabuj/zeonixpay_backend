@@ -284,16 +284,16 @@ class BKashCallbackView(views.APIView):
             invoice.save()
             # return redirect(f"{os.getenv("PAYMENT_REDIRECT_PAGE_BASE_URL")}?status=success&{query_string}&client_callback_url={client_callback_url}")
             # return redirect(f"{os.getenv("PAYMENT_REDIRECT_PAGE_BASE_URL")}?status=success&client_callback_url={client_callback_url}")
-            return redirect(f"{os.getenv("PAYMENT_REDIRECT_PAGE_BASE_URL")}?status=success&invoice_payment_id={invoice.invoice_payment_id}")
+            return redirect(f"{os.getenv('PAYMENT_REDIRECT_PAGE_BASE_URL')}?status=success&invoice_payment_id={invoice.invoice_payment_id}")
         elif status == "failure":
             invoice.pay_status = "failed"
             invoice.save()
-            return redirect(f"{os.getenv("PAYMENT_REDIRECT_PAGE_BASE_URL")}?status=failed&invoice_payment_id={invoice.invoice_payment_id}")
+            return redirect(f"{os.getenv('PAYMENT_REDIRECT_PAGE_BASE_URL')}?status=failed&invoice_payment_id={invoice.invoice_payment_id}")
             # return redirect(f"{os.getenv('PAYMENT_SITE_BASE_URL')}/success/?{query_string}&client_callback_url={client_callback_url}")
         elif status == "cancel":
             invoice.pay_status = "cancelled"
             invoice.save()
-            return redirect(f"{os.getenv("PAYMENT_REDIRECT_PAGE_BASE_URL")}?status=cancel&invoice_payment_id={invoice.invoice_payment_id}")
+            return redirect(f"{os.getenv('PAYMENT_REDIRECT_PAGE_BASE_URL')}?status=cancel&invoice_payment_id={invoice.invoice_payment_id}")
             # return redirect(f"{os.getenv('PAYMENT_REDIRECT_PAGE_BASE_URL')}?{query_string}&client_callback_url={client_callback_url}")
         
         # Success: Payment completed successfully
