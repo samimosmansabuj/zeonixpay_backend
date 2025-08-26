@@ -5,6 +5,10 @@ from authentication.models import BasePaymentGateWay
 from django.conf import settings
 from django.conf.urls.static import static
 
+admin.site.site_title = "ZeonixPay"
+admin.site.site_header = "ZeonixPay"
+admin.site.app_index = "Welcome to ZeonixPay"
+
 def home(request):
     a = BasePaymentGateWay.objects.filter(method='bkash', is_active=True).order_by('id')
     print(a)

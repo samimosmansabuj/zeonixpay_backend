@@ -85,8 +85,8 @@ class CreatePayment(views.APIView):
                     )
             else:
                 # return redirect(f"{reverse('get-payment')}?invoice_payment_id={invoice.invoice_payment_id}")
-                
-                return redirect(f"{os.getenv('PAYMENT_SITE_BASE_URL')}/payment/?invoice_payment_id={invoice.invoice_payment_id}")
+                print(os.getenv('PAYMENT_SITE_BASE_URL'))
+                return redirect(f"{os.getenv('PAYMENT_SITE_BASE_URL')}?invoice_payment_id={invoice.invoice_payment_id}")
         except Exception as e:
             return Response(
                 {
@@ -223,7 +223,6 @@ class GetOnlinePayment(views.APIView):
         except Invoice.DoesNotExist:
             raise NotFound("Invoice with provided Invoice Payment ID not found.")
         
-        print("brand_logo: ", invoice.merchant.brand_logo)
         
         status_verify = self.status_verify(invoice)
         if status_verify:
@@ -255,6 +254,54 @@ class GetOnlinePayment(views.APIView):
             )
         return False
 
+class VerifyPayment(views.APIView):
+    def post(self, request, *args, **kwargs):
+        status_params = request.data.get("status")
+        invoice_payment_id = request.data.get("invoice_payment_id")
+        if not invoice_payment_id:
+            return Response(
+                {
+                    "status": False,
+                    "message": "Invoice Payment ID must be given!"
+                }, status=status.HTTP_400_BAD_REQUEST
+            )
+        elif not status_params:
+            return Response(
+                {
+                    "status": False,
+                    "message": "Status must be given!"
+                }, status=status.HTTP_400_BAD_REQUEST
+            )
+        elif invoice_payment_id and status:
+            if not Invoice.objects.filter(invoice_payment_id=invoice_payment_id).exists():
+                return Response(
+                    {
+                        "status": False,
+                        "message": "Invalid Invoice Payment ID!"
+                    }, status=status.HTTP_400_BAD_REQUEST
+                )
+            else:
+                invoice = Invoice.objects.get(invoice_payment_id=invoice_payment_id)
+                callback_url = f"{invoice.callback_url}?invoice_payment_id={invoice.invoice_payment_id}&trxID={invoice.transaction_id}&amount={invoice.customer_amount}&paymentStatus={invoice.pay_status}&created_at={invoice.created_at}"
+                return Response(
+                    {
+                        "status": True if invoice.pay_status == "Paid" else False,
+                        "data": {
+                            "invoice_payment_id": invoice.invoice_payment_id,
+                            "trxID": invoice.transaction_id,
+                            "amount": invoice.customer_amount,
+                            "transactionStatus": "Complete" if invoice.pay_status == "paid" else "Incomplete",
+                            "client_callback_url": callback_url if invoice.callback_url else None
+                        }
+                    }, status=status.HTTP_200_OK
+                )
+        else:
+            return Response(
+                {
+                    "status": False,
+                    "message": "Something wrong!"
+                }, status=status.HTTP_400_BAD_REQUEST
+            )
 
 # ===============================================================================================
 # ====================Merchant Payment Gate API View Start==================================
