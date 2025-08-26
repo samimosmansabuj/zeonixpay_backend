@@ -314,8 +314,9 @@ class StorePaymentMessage(models.Model):
             self.payment_number = phone_match.group(1)
         
         #Extract Date From Message============
+        text = self.message.replace('\xa0', ' ')
         date_pattern = r"(\d{2}/\d{2}/\d{4} \d{2}:\d{2})"
-        date_match = re.search(date_pattern, self.message)
+        date_match = re.search(date_pattern, text)
         if date_match:
             try:
                 self.message_date = datetime.strptime(date_match.group(1), "%d/%m/%Y %H:%M")
@@ -338,7 +339,6 @@ class StorePaymentMessage(models.Model):
             self.trx_id = trxid_match.group(1)
         
         #Extract Payment number From Message============
-        # phone_pattern = r"from (\d{11})"
         phone_pattern = r"from (\S+)"
         phone_match = re.search(phone_pattern, self.message)
         if phone_match:

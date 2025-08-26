@@ -1,4 +1,4 @@
-from .views import InvoiceViewSet, GetOnlinePayment, CreatePayment, WalletOverView, WalletTransactionViewSet, WithdrawRequestViewSet, PaymentPayOutView, UserPaymentMethodView, PayOutViewSet
+from .views import InvoiceViewSet, GetOnlinePayment, CreatePayment, WalletOverView, WalletTransactionViewSet, WithdrawRequestViewSet, PaymentPayOutView, UserPaymentMethodView, PayOutViewSet, VerifyPayment
 from .payment.personal_payment import BkashPersonalAgentPaymentView, NagadPersonalAgentPaymentView, RocketPersonalAgentPaymentView
 from .payment.bkash import BKashCreatePaymentView, BKashCallbackView
 from rest_framework.routers import DefaultRouter
@@ -34,6 +34,7 @@ urlpatterns = [
     #API For Payment m2m=================/API key & Secret Key Verify/===========
     path('payment/create/', CreatePayment.as_view(), name='create-payment'),
     path('payment/payout/', PaymentPayOutView.as_view(), name='payment-payout'),
+    path('payment/verify/', VerifyPayment.as_view(), name='payment-payout'),
     # ---------------------------SendBox-------------------------------------
     
     #API For Payment m2m=================/Not Authentication Needed/===========
