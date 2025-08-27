@@ -369,7 +369,7 @@ class BKashQueryPaymentView(views.APIView):
             return Response(
                 {
                     "status": False,
-                    "message": f"Bkash payment is {data.get("statusMessage")} but Invoice is {invoice.pay_status}, Contact with support!"
+                    "message": f"Bkash payment is {data.get('statusMessage')} but Invoice is {invoice.pay_status}, Contact with support!"
                 }
             )
         
