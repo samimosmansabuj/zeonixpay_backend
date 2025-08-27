@@ -61,47 +61,59 @@ class CreatePayment(views.APIView):
     #     if not any(request_domain.endswith(allowed_domain) for allowed_domain in allowed_domains):
     #         raise AuthenticationFailed(f"Access denied from domain {request_domain}.")
     
+    def get_accepted_method(self):
+        return ["bkash", "nagad", "rocket", "bkash-personal", "bkash-agent", "nagad-personal", "nagad-agent", "rocket-personal", "rocket-agent"]
+    
+    
     def post(self, request, *args, **kwargs):
         try:
             merchant = self.authenticate_using_api_key_and_secret(request)
-            post_data = request.data.copy()
-            serializer = InvoiceSerializer(data=post_data)
+            serializer = InvoiceSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             serializer.save(merchant=merchant)
             invoice = serializer.instance
             
-            if invoice.method:
-                if invoice.method.lower() == 'bkash':
-                    # url = f"{reverse('get-payment-bkash')}?invoice_payment_id={invoice.invoice_payment_id}"
-                    # return redirect(f"{url}?redirect=1")
-                    
+            
+            
+            if invoice.method and invoice.method.lower() in self.get_accepted_method():
+                if invoice.method.lower() == "bkash":
                     url = f"{reverse('get-payment')}?invoice_payment_id={invoice.invoice_payment_id}&method=bkash"
                     return redirect(url)
-                elif invoice.method.lower() == 'nagad':
-                    return Response(
-                        {
-                            'message': 'Redirect Nagad Payment Gateway URL!'
-                        }
-                    )
+                elif invoice.method.lower() == "nagad":
+                    # return Response(
+                    #     {
+                    #         'message': 'Redirect Nagad Payment Gateway URL!'
+                    #     }
+                    # )
+                    paymentURL = f"{os.getenv('PAYMENT_SITE_BASE_URL')}?invoice_payment_id={invoice.invoice_payment_id}&method={invoice.method}"
+                elif invoice.method.lower() == "rocket":
+                    # return Response(
+                    #     {
+                    #         'message': 'Redirect Nagad Payment Gateway URL!'
+                    #     }
+                    # )
+                    paymentURL = f"{os.getenv('PAYMENT_SITE_BASE_URL')}?invoice_payment_id={invoice.invoice_payment_id}&method={invoice.method}"
+                
+                paymentURL = f"{os.getenv('PAYMENT_SITE_BASE_URL')}?invoice_payment_id={invoice.invoice_payment_id}&method={invoice.method}"
             else:
-                # return redirect(f"{reverse('get-payment')}?invoice_payment_id={invoice.invoice_payment_id}")
+            # return redirect(f"{reverse('get-payment')}?invoice_payment_id={invoice.invoice_payment_id}")
                 paymentURL = f"{os.getenv('PAYMENT_SITE_BASE_URL')}?invoice_payment_id={invoice.invoice_payment_id}"
-                return Response(
-                    {
-                        "statusMessage": "Successful",
-                        "paymentID": f"{invoice.invoice_payment_id}",
-                        "paymentURL": paymentURL,
-                        "callbackURL": f"{invoice.callback_url}",
-                        "successCallbackURL": f"{invoice.callback_url}?invoice_payment_id={invoice.invoice_payment_id}&paymentStatus=success",
-                        "failureCallbackURL": f"{invoice.callback_url}?invoice_payment_id={invoice.invoice_payment_id}&paymentStatus=failure",
-                        "cancelledCallbackURL": f"{invoice.callback_url}?invoice_payment_id={invoice.invoice_payment_id}&paymentStatus=cancel",
-                        "amount": f"{invoice.customer_amount}",
-                        "paymentCreateTime": f"{invoice.created_at}",
-                        "transactionStatus": "Initiated",
-                        "merchantInvoiceNumber": f"{invoice.merchant.merchant_id}"
-                    }, status=status.HTTP_200_OK
-                )
-                # return redirect(paymentURL)
+            return Response(
+                {
+                    "statusMessage": "Successful",
+                    "paymentID": f"{invoice.invoice_payment_id}",
+                    "paymentURL": paymentURL,
+                    "callbackURL": f"{invoice.callback_url}",
+                    "successCallbackURL": f"{invoice.callback_url}?invoice_payment_id={invoice.invoice_payment_id}&paymentStatus=success",
+                    "failureCallbackURL": f"{invoice.callback_url}?invoice_payment_id={invoice.invoice_payment_id}&paymentStatus=failure",
+                    "cancelledCallbackURL": f"{invoice.callback_url}?invoice_payment_id={invoice.invoice_payment_id}&paymentStatus=cancel",
+                    "amount": f"{invoice.customer_amount}",
+                    "paymentCreateTime": f"{invoice.created_at}",
+                    "transactionStatus": "Initiated",
+                    "merchantInvoiceNumber": f"{invoice.merchant.merchant_id}"
+                }, status=status.HTTP_200_OK
+            )
+            # return redirect(paymentURL)
         except Exception as e:
             return Response(
                 {
