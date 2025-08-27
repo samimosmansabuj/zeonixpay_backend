@@ -354,11 +354,25 @@ class BKashQueryPaymentView(views.APIView):
         payment_id = request.query_params.get("paymentID")
         if not payment_id:
             return Response({"status": False, "message": "paymentID missing"}, status=400)
-        client = BKashClient()
+        
+        invoice = get_object_or_404(Invoice, method_payment_id=payment_id)
+        if not invoice:
+            return Response({"status": False, "message": "No Invoice Detec with this paymentID"}, status=400)
+        
+        client = BKashClient(invoice.payment_gateway)
         try:
             data = client.query_payment(payment_id)
         except BKashError as e:
             return Response({"status": False, "message": str(e)}, status=502)
+        
+        if data.get("transactionStatus") == "Completed" and invoice.pay_status.lower() != "paid":
+            return Response(
+                {
+                    "status": False,
+                    "message": f"Bkash payment is {data.get("statusMessage")} but Invoice is {invoice.pay_status}, Contact with support!"
+                }
+            )
+        
         return Response({"status": True, "data": data})
 
 
