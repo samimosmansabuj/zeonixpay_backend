@@ -77,9 +77,11 @@ class CreatePayment(views.APIView):
             
             if invoice.method and invoice.method.lower() in self.get_accepted_method():
                 if invoice.method.lower() == "bkash":
-                    url = f"{reverse('get-payment')}?invoice_payment_id={invoice.invoice_payment_id}&method={invoice.method}"
-                    return redirect(url)
-                    # paymentURL = 
+                    base = reverse('get-payment')
+                    url = f"{request.build_absolute_uri(base)}?invoice_payment_id={invoice.invoice_payment_id}&method={invoice.method}"
+                    # url = f"{reverse('get-payment')}?invoice_payment_id={invoice.invoice_payment_id}&method={invoice.method}"
+                    # return redirect(url)
+                    paymentURL = url
                 elif invoice.method.lower() == "nagad":
                     # return Response(
                     #     {
