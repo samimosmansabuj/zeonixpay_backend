@@ -29,7 +29,7 @@ INSTALLED_APPS = [
     'django_extensions', 'django_filters',
     'rest_framework_simplejwt.token_blacklist',
     
-    "authentication", "core", "api_sendbox"
+    "authentication", "core"
 ]
 
 MIDDLEWARE = [

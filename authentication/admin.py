@@ -150,7 +150,7 @@ class MerchantAdmin(admin.ModelAdmin):
         "is_active",
         "domain_name",
     )
-    search_fields = ("brand_name", "domain_name", "user__username", "email", "mobile_number")
+    search_fields = ("brand_name", "domain_name", "user__username", "user__email", "whatsapp_number")
     list_filter = ("status", "fees_type", "is_active")
     autocomplete_fields = ("user",)
     readonly_fields = ("merchant_id", "is_active")
