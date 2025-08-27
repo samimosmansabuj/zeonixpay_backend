@@ -77,8 +77,8 @@ class CreatePayment(views.APIView):
             
             if invoice.method and invoice.method.lower() in self.get_accepted_method():
                 if invoice.method.lower() == "bkash":
-                    url = f"{reverse('get-payment')}?invoice_payment_id={invoice.invoice_payment_id}&method=bkash"
-                    return redirect(url)
+                    # return redirect(url)
+                    paymentURL = f"{reverse('get-payment')}?invoice_payment_id={invoice.invoice_payment_id}&method={invoice.method}"
                 elif invoice.method.lower() == "nagad":
                     # return Response(
                     #     {
@@ -93,8 +93,8 @@ class CreatePayment(views.APIView):
                     #     }
                     # )
                     paymentURL = f"{os.getenv('PAYMENT_SITE_BASE_URL')}?invoice_payment_id={invoice.invoice_payment_id}&method={invoice.method}"
-                
-                paymentURL = f"{os.getenv('PAYMENT_SITE_BASE_URL')}?invoice_payment_id={invoice.invoice_payment_id}&method={invoice.method}"
+                else:
+                    paymentURL = f"{os.getenv('PAYMENT_SITE_BASE_URL')}?invoice_payment_id={invoice.invoice_payment_id}"
             else:
             # return redirect(f"{reverse('get-payment')}?invoice_payment_id={invoice.invoice_payment_id}")
                 paymentURL = f"{os.getenv('PAYMENT_SITE_BASE_URL')}?invoice_payment_id={invoice.invoice_payment_id}"
