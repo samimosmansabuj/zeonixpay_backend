@@ -85,8 +85,23 @@ class CreatePayment(views.APIView):
                     )
             else:
                 # return redirect(f"{reverse('get-payment')}?invoice_payment_id={invoice.invoice_payment_id}")
-                print(os.getenv('PAYMENT_SITE_BASE_URL'))
-                return redirect(f"{os.getenv('PAYMENT_SITE_BASE_URL')}?invoice_payment_id={invoice.invoice_payment_id}")
+                paymentURL = f"{os.getenv('PAYMENT_SITE_BASE_URL')}?invoice_payment_id={invoice.invoice_payment_id}"
+                return Response(
+                    {
+                        "statusMessage": "Successful",
+                        "paymentID": f"{invoice.invoice_payment_id}",
+                        "paymentURL": paymentURL,
+                        "callbackURL": f"{invoice.callback_url}",
+                        "successCallbackURL": f"{invoice.callback_url}?invoice_payment_id={invoice.invoice_payment_id}&paymentStatus=success",
+                        "failureCallbackURL": f"{invoice.callback_url}?invoice_payment_id={invoice.invoice_payment_id}&paymentStatus=failure",
+                        "cancelledCallbackURL": f"{invoice.callback_url}?invoice_payment_id={invoice.invoice_payment_id}&paymentStatus=cancel",
+                        "amount": f"{invoice.customer_amount}",
+                        "paymentCreateTime": f"{invoice.created_at}",
+                        "transactionStatus": "Initiated",
+                        "merchantInvoiceNumber": f"{invoice.merchant.merchant_id}"
+                    }, status=status.HTTP_200_OK
+                )
+                # return redirect(paymentURL)
         except Exception as e:
             return Response(
                 {
@@ -118,8 +133,13 @@ class PaymentPayOutView(views.APIView):
             serializer.save(merchant=merchant)
             return Response(
                 {
-                    'status': True,
-                    'mesage': 'PayOut Successfully!, Status Pending!'
+                    "status": True,
+                    "payoutID": f"{serializer.instance.trx_uuid}",
+                    "method": f"{serializer.instance.payment_method}",
+                    "amount": f"{serializer.instance.amount}",
+                    "payoutCreateTime": f"{serializer.instance.created_at}",
+                    "transactionStatus": f"{serializer.instance.status}",
+                    "merchantId": f"{serializer.instance.merchant.merchant_id}"
                 }, status=status.HTTP_200_OK
             )
         except Exception as e:

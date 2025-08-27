@@ -1,6 +1,6 @@
 from .views import InvoiceViewSet, GetOnlinePayment, CreatePayment, WalletOverView, WalletTransactionViewSet, WithdrawRequestViewSet, PaymentPayOutView, UserPaymentMethodView, PayOutViewSet, VerifyPayment
 from .payment.personal_payment import BkashPersonalAgentPaymentView, NagadPersonalAgentPaymentView, RocketPersonalAgentPaymentView
-from .payment.bkash import BKashCreatePaymentView, BKashCallbackView
+from .payment.bkash import BKashCreatePaymentView, BKashCallbackView, BKashQueryPaymentView
 from rest_framework.routers import DefaultRouter
 from django.urls import path, include
 
@@ -42,6 +42,7 @@ urlpatterns = [
     
     #Bkash Payment Gate URL list==============
     path('get-payment/bkash/', BKashCreatePaymentView.as_view(), name='get-payment-bkash'),
+    path('bkash/payment/verify/', BKashQueryPaymentView.as_view(), name='bkash-payment-verify'),
     path('payment/<str:invoice_payment_id>/bkash/callback/', BKashCallbackView.as_view(), name='bkash_callback'),
     
     #Personal Payment URL List==========
