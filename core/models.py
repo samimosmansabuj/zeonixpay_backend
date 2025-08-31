@@ -357,20 +357,58 @@ class WalletTransaction(models.Model):
                 ip = request.META.get('REMOTE_ADDR', '')
             self.ip_address = ip
     
+    def _which_fee_bucket(self):
+        tran = (self.tran_type or '').lower()
+        model_name = None
+        if self.content_type:
+            model_name = (self.content_type.model or '').lower()
+        elif self.service is not None:
+            model_name = self.service.__class__.__name__.lower()
+
+        if model_name:
+            model_name = model_name.replace('_', '')
+
+        if tran == 'credit' and model_name == 'invoice':
+            return 'deposit'
+        if tran == 'debit' and model_name in ('paymenttransfer',):
+            return 'payout'
+        if tran == 'debit' and model_name in ('withdrawrequest',):
+            return 'withdraw'
+        return None
+
     def fees_disbursement(self):
-        fees_type = getattr(self.merchant, 'fees_type', None)
-        fees_amount = self._as_decimal(getattr(self.merchant, 'fees', 0))
+        if not self.merchant:
+            self.fee = Decimal('0')
+            self.net_amount = self.amount
+            return
+
+        bucket = self._which_fee_bucket()
+
+        if bucket == 'deposit':
+            fee_value = self._as_decimal(getattr(self.merchant, 'deposit_fees', 0))
+        elif bucket == 'payout':
+            fee_value = self._as_decimal(getattr(self.merchant, 'payout_fees', 0))
+        elif bucket == 'withdraw':
+            fee_value = self._as_decimal(getattr(self.merchant, 'withdraw_fees', 0))
+        else:
+            fee_value = self._as_decimal(getattr(self.merchant, 'deposit_fees', 0))
         
-        if fees_type == "Parcentage":
-            self.fee = (self.amount * fees_amount) / Decimal('100')
-        elif fees_type == "Flat":
-            self.fee = fees_amount
+        fees_type = (getattr(self.merchant, 'fees_type', '') or '').lower()
+        is_percentage = fees_type in ('percentage', 'parcentage')
+
+        if is_percentage:
+            self.fee = (self.amount * fee_value) / Decimal('100')
+        elif fees_type == 'flat':
+            self.fee = fee_value
         else:
             self.fee = (self.amount * Decimal('10')) / Decimal('100')
+
         self.net_amount = self.amount - self.fee
     
     @transaction.atomic
     def save(self, *args, **kwargs):
+        creating = self._state.adding or not self.pk
+        
         if not self.trx_uuid:
             self.trx_uuid = uuid.uuid4().hex
         
@@ -380,15 +418,22 @@ class WalletTransaction(models.Model):
         original = self._get_original()
         prev_status = (original.status.lower() if original and original.status else None)
         prev_amount = (self._as_decimal(original.amount) if original else None)
-        prev_tran   = (original.tran_type.lower() if original and original.tran_type else None)
-        
+        # prev_status = (original.status.lower() if original and original.status else None)
+        # prev_amount = (self._as_decimal(original.amount) if original else None)
+        # prev_tran   = (original.tran_type.lower() if original and original.tran_type else None)
+               
         new_status = (self.status or '').lower()
         new_tran   = (self.tran_type or '').lower()
         
         wallet = self.wallet
         if not wallet:
             raise ValidationError("Wallet is required for a transaction.")
-        old_balance = wallet.balance
+        
+        # old_balance = wallet.balance
+        if creating or not self.previous_balance:
+            old_balance_for_record = wallet.balance
+        else:
+            old_balance_for_record = self.previous_balance  # freeze from first write
         
         # ---------- FEES ----------
         self.fees_disbursement()
@@ -398,7 +443,6 @@ class WalletTransaction(models.Model):
         if new_tran == 'debit':
             if not original:
                 if new_status == 'pending':
-                    print(wallet.balance)
                     if wallet.balance < self.amount:
                         raise ValidationError("Insufficient available balance to place a pending hold.")
                     wallet.balance -= self.amount
@@ -444,21 +488,33 @@ class WalletTransaction(models.Model):
         elif new_tran == 'credit':
             if not original:
                 if new_status == 'success':
-                    wallet.balance += self.amount
+                    wallet.balance += self.net_amount
                     wallet.save()
             else:
                 if prev_status == 'pending' and new_status == 'success':
-                    wallet.balance += self.amount
+                    wallet.balance += self.net_amount
                     wallet.save()
                 elif prev_status in ('success', 'failed'):
                     raise ValidationError(f"Cannot update a {prev_status} transaction.")
 
-        self.previous_balance = old_balance
-        self.current_balance  = wallet.balance
+        if creating or not self.previous_balance:
+            self.previous_balance = old_balance_for_record  # set once
+        self.current_balance = wallet.balance
         
-        
-        return super().save(*args, **kwargs)
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None:
+            if creating:
+                kwargs.pop('update_fields', None)
+            else:
+                update_fields = set(update_fields)
+                update_fields.update({'fee', 'net_amount', 'current_balance'})
+                if not self.previous_balance:
+                    update_fields.add('previous_balance')
+                kwargs['update_fields'] = update_fields
 
+        return super().save(*args, **kwargs)
+        
+    
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=['content_type', 'object_id'], name='uniq_wallet_txn_per_service')

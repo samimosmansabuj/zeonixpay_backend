@@ -146,7 +146,9 @@ class MerchantAdmin(admin.ModelAdmin):
         "merchant_id",
         "status",
         "fees_type",
-        "fees",
+        "deposit_fees",
+        "payout_fees",
+        "withdraw_fees",
         "is_active",
         "domain_name",
     )
@@ -174,7 +176,9 @@ class MerchantAdmin(admin.ModelAdmin):
                 "fields": (
                     "status",
                     "fees_type",
-                    "fees",
+                    "deposit_fees",
+                    "payout_fees",
+                    "withdraw_fees",
                     "is_active",
                 )
             },
