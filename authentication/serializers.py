@@ -193,7 +193,7 @@ class StorePaymentMessageSerializer(serializers.ModelSerializer):
 class MerchantSerializer(serializers.ModelSerializer):
     class Meta:
         model = Merchant
-        fields = ['brand_name', 'whatsapp_number', 'domain_name', 'brand_logo', 'status', 'fees_type', 'fees', 'is_active']
+        fields = ['brand_name', 'whatsapp_number', 'domain_name', 'brand_logo', 'status', 'fees_type', 'deposit_fees', 'payout_fees', 'withdraw_fees', 'is_active']
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
