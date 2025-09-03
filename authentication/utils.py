@@ -10,7 +10,7 @@ from django.contrib.auth import authenticate
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
-from .models import CustomUser
+from .models import CustomUser, StorePaymentMessage
 import random, string
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser, JSONParser, FormParser
@@ -273,6 +273,7 @@ class CustomOnlyAdminCreateViewsetsViews(viewsets.ModelViewSet):
     permission_classes = [AdminAllPermission]
     # filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     
+    
     pagination_class = None
     model = None
     
@@ -290,12 +291,12 @@ class CustomOnlyAdminCreateViewsetsViews(viewsets.ModelViewSet):
         return response
     
     def retrieve(self, request, *args, **kwargs):
-        response = super().retrieve(request, *args, **kwargs)
+        object = self.get_object()
         try:
             return Response(
                 {
                     'status': True,
-                    'data': response.data
+                    'data': self.get_serializer(object).data
                 }, status=status.HTTP_200_OK
             )
         except Exception as e:
@@ -350,8 +351,7 @@ class CustomOnlyAdminCreateViewsetsViews(viewsets.ModelViewSet):
         try:
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
-            # self.perform_create(serializer)
-            serializer.save()
+            self.perform_create(serializer)
             return Response(
                 {
                     'status': True,
@@ -375,6 +375,72 @@ class CustomOnlyAdminCreateViewsetsViews(viewsets.ModelViewSet):
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        if queryset is None:
+            return Response(
+                {
+                    'status': True,
+                    'message': "Can't Get with this User!"
+                }
+            )
+        
+        all_items = request.query_params.get('all', 'false').lower() == 'true'
+        page_size = request.query_params.get(self.pagination_class.page_size_query_param)
+        
+        
+        if all_items or (page_size and page_size.isdigit() and int(page_size)==0):
+            try:
+                response = self.get_serializer(queryset, many=True)
+                return Response(
+                    {
+                        'status': True,
+                        'count': len(response.data),
+                        'data': response.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+            except Exception as e:
+                return Response(
+                    {
+                        'status': False,
+                        'error': str(e)
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+        
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            response = self.get_serializer(page, many=True)
+            return Response(
+                {
+                    'status': True,
+                    'count': self.paginator.page.paginator.count,
+                    'next': self.paginator.get_next_link(),
+                    'previous': self.paginator.get_previous_link(),
+                    'data': response.data
+                },
+                status=status.HTTP_200_OK
+            )
+        else:
+            try:
+                response = self.get_serializer(queryset, many=True)
+                return Response(
+                    {
+                        'status': True,
+                        'count': len(response.data),
+                        'data': response.data
+                    },
+                    status=status.HTTP_200_OK
+                )
+            except Exception as e:
+                return Response(
+                    {
+                        'status': False,
+                        'error': str(e)
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
             
 
     

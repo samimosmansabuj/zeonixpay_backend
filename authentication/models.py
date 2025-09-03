@@ -4,7 +4,6 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from datetime import datetime
 from django.db import models
-
 import uuid, secrets, random, string, re
 
 
@@ -207,7 +206,7 @@ class BasePaymentGateWay(models.Model):
     
     base_url = models.URLField(max_length=255, blank=True, null=True)
     details_json = models.JSONField(blank=True, null=True)
-    callback_base_url = models.URLField(max_length=255)
+    callback_base_url = models.URLField(max_length=255, blank=True, null=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -224,8 +223,9 @@ class BasePaymentGateWay(models.Model):
 
 
 class SmsDeviceKey(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, related_name="staff_device_key", blank=True, null=True)
     device_name = models.CharField(max_length=50)
-    device_key = models.CharField(max_length=100)
+    device_key = models.CharField(max_length=100, blank=True, null=True)
     device_pin = models.CharField(max_length=255)
     is_active = models.BooleanField(default=True)
     create_at = models.DateTimeField(auto_now_add=True)
@@ -248,8 +248,9 @@ class SmsDeviceKey(models.Model):
     def __str__(self):
         return self.device_key
 
-
 class StorePaymentMessage(models.Model):
+    from core.models import Invoice
+    
     device = models.ForeignKey(SmsDeviceKey, on_delete=models.SET_NULL, related_name='payment_messages', null=True, blank=True)
     message_from = models.CharField(max_length=20)
     message = models.TextField(blank=True, null=True)
@@ -258,6 +259,7 @@ class StorePaymentMessage(models.Model):
     message_amount = models.DecimalField(decimal_places=2, max_digits=9, blank=True, null=True)
     message_date = models.DateTimeField(blank=True, null=True)
     is_verified = models.BooleanField(default=False)
+    verified_invoice = models.ForeignKey(Invoice, on_delete=models.SET_NULL, related_name="invoice_payment_message", blank=True, null=True)
     create_at = models.DateTimeField(auto_now_add=True)
     
     def extract_bkash_message(self):

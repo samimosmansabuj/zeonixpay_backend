@@ -231,14 +231,14 @@ class CustomPaymentSectionViewsets(viewsets.ModelViewSet):
                 {
                     'status': False,
                     'message': str(e)
-                }
+                }, status=status.HTTP_404_NOT_FOUND
             )
     
 
     def update(self, request, *args, **kwargs):
         try:
-            object = self.get_object()
-            serializer = self.get_serializer(object, data=request.data, partial=True)
+            instance = self.get_object()
+            serializer = self.get_serializer(instance, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
             self.perform_update(serializer)
             return Response(

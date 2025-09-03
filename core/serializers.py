@@ -1,6 +1,7 @@
 from .models import Invoice, PaymentTransfer, WithdrawRequest, WalletTransaction
 from authentication.models import UserPaymentMethod
 from rest_framework import serializers
+from authentication.models import CustomUser
 
 
 
