@@ -1,4 +1,4 @@
-from .serializers import CustomUserSerializer, RegistrationSerializer, MerchantLoginSerializer, AdminLoginSerializer, MerchantRegistrationSerializer, MerchantSerializer, UserSerializer, BasePaymentGateWaySerializer, StorePaymentMessageSerializer, SmsDeviceKeySerializer, APIKeySerializer, MerchantUserListSerializer
+from .serializers import CustomUserSerializer, RegistrationSerializer, MerchantLoginSerializer, AdminLoginSerializer, MerchantRegistrationSerializer, MerchantSerializer, UserSerializer, BasePaymentGateWaySerializer, StorePaymentMessageSerializer, SmsDeviceKeySerializer, APIKeySerializer, MerchantUserListSerializer, StaffLoginSerializer
 from .models import UserRole, Merchant, BasePaymentGateWay, StorePaymentMessage, SmsDeviceKey, APIKey, CustomUser
 from .utils import CustomTokenObtainPairView, CustomUserCreateAPIView, CustomOnlyAdminCreateViewsetsViews, CustomPagenumberpagination, CustomMerchantUserViewsets
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
@@ -14,6 +14,7 @@ from django.db.models import QuerySet
 from django.http import Http404
 from rest_framework.parsers import MultiPartParser, JSONParser, FormParser
 from rest_framework.decorators import api_view, permission_classes
+from core.paginations import CustomPagenumberpagination
 
 
 # ========================Registration/Account Create Views Start===============================
@@ -46,9 +47,13 @@ class AdminOrStaffRegisterView(CustomUserCreateAPIView):
 # ========================Authentication Token Views Start================================
 class AdminLoginView(CustomTokenObtainPairView):
     serializer_class = AdminLoginSerializer
+
+class StaffLoginView(CustomTokenObtainPairView):
+    serializer_class = StaffLoginSerializer
     
 class MerchantLoginView(CustomTokenObtainPairView):
     serializer_class = MerchantLoginSerializer
+
 # ========================Authentication Token Views End================================
 
 # ========================Token Handling Views Start================================
@@ -442,7 +447,7 @@ class APIKeyDetailAPIView(APIView):
 
 
 class AdminStaffUserList(CustomMerchantUserViewsets):
-    queryset = CustomUser.objects.filter(role__name="Admin")
+    queryset = CustomUser.objects.filter(role__name__in=["Admin", "Staff"])
     serializer_class = CustomUserSerializer
 
 class MerchatUserList(CustomMerchantUserViewsets):
@@ -500,6 +505,7 @@ class SmsDeviceKeyViewSet(CustomOnlyAdminCreateViewsetsViews):
     queryset = SmsDeviceKey.objects.all().order_by("-create_at")
     serializer_class = SmsDeviceKeySerializer
     permission_classes = [AdminAllPermission]
+    pagination_class = CustomPagenumberpagination
     # filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["device_key"]
     ordering_fields = ["create_at", "updated_ta"]
@@ -509,11 +515,67 @@ class SmsDeviceKeyViewSet(CustomOnlyAdminCreateViewsetsViews):
     update_success_message = "Device Key Object Updated!"
     delete_success_message = "Device Key Object Deleted!"
     not_found_message = "Device Key Object Not Found!"
+    
+    def retrieve(self, request, *args, **kwargs):
+        object = self.get_object()
+        try:
+            response_data = self.retrive_response(object)
+            return Response(
+                response_data,
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response(
+                {
+                    'status': False,
+                    'data': str(e)
+                }, status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    def retrive_response(self, device):
+        all_message = self.request.query_params.get("all-message", False)
+        if bool(all_message):
+            messages = StorePaymentMessage.objects.filter(device=device)
+        else:
+            messages = StorePaymentMessage.objects.filter(device=device)[:5]
+        messages_data = StorePaymentMessageSerializer(messages, many=True).data
+        return {
+            'status': True,
+            'data': self.get_serializer(device).data,
+            'messages': messages_data
+        }
+    
+    def get_object(self):
+        try:
+            return self.get_queryset().get(device_key=self.kwargs.get("device_key"))
+        except SmsDeviceKey.DoesNotExist:
+            raise exceptions.NotFound("Device not found with this Device Key")
+    
+    def get_queryset(self):
+        if self.request.user.role.name.lower() == "admin":
+            return super().get_queryset()
+        elif self.request.user.role.name.lower() == "staff":
+            return SmsDeviceKey.objects.filter(user=self.request.user)
+        else:
+            SmsDeviceKey.objects.none
+    
+    def perform_create(self, serializer):
+        if self.request.user.role.name.lower() == "staff":
+            serializer.save(user=self.request.user)
+        elif self.request.user.role.name.lower() == "admin":
+            selected_user = serializer.validated_data.get('user')
+            if selected_user and selected_user.role.name.lower() == "staff":
+                serializer.save(user=selected_user)
+            else:
+                raise Exception("Admin must select a staff user to assign the device key.")
+        else:
+            raise Exception("Only Admin or Staff can create the device key.")
 
-
+    
 class StorePaymentMessageViewSet(CustomOnlyAdminCreateViewsetsViews):
     queryset = StorePaymentMessage.objects.all().order_by("-create_at")
     serializer_class = StorePaymentMessageSerializer
+    pagination_class = CustomPagenumberpagination
     # filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["payment_number", "message"]
     ordering_fields = ["message_date", "create_at"] 
@@ -522,6 +584,7 @@ class StorePaymentMessageViewSet(CustomOnlyAdminCreateViewsetsViews):
     update_success_message = "Message Store Object Updated!"
     delete_success_message = "Message Store Object Deleted!"
     not_found_message = "Message Store Object Not Found!"
+    
 
 
 # -----------------------------------------------------------------------------------------------------------

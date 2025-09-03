@@ -12,7 +12,7 @@ class AdminCreatePermission(BasePermission):
 class AdminAllPermission(BasePermission):
     def has_permission(self, request, view):
         user = request.user
-        return user.is_authenticated and user.role.name in ['Admin']
+        return user.is_authenticated and user.role.name in ['Admin', 'Staff']
 
 
 class IsOwnerByUser(BasePermission):
@@ -26,4 +26,11 @@ class MerchantCreatePermission(BasePermission):
             return True
         user = request.user
         return user.is_authenticated and user.role.name == 'Merchant'
+
+class StaffUpdatePermission(BasePermission):
+    def has_permission(self, request, view):
+        if request.method in SAFE_METHODS:
+            return True
+        user = request.user
+        return user.is_authenticated and user.role.name in ['Staff', 'Admin']
 

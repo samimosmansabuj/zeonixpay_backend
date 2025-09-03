@@ -21,9 +21,18 @@ class AdminLoginSerializer(CustomLoginSerializer):
         if user.status in ['Pending', 'Disable']:
             return {'status': False, 'message': f'Your account is {user.status}!'}
         
-        if user.role and user.role.name in ['Admin', 'Staff']:
-            return {'status': True, 'message': 'Admin/Staff user'}
-        return {'status': False, 'message': 'This is admin or staff account credentials!'}
+        if user.role and user.role.name in ['Admin']:
+            return {'status': True, 'message': 'Admin user'}
+        return {'status': False, 'message': 'This is admin account credentials!'}
+
+class StaffLoginSerializer(CustomLoginSerializer):
+    def verify_user_role(self, user):
+        if user.status in ['Pending', 'Disable']:
+            return {'status': False, 'message': f'Your account is {user.status}!'}
+        
+        if user.role and user.role.name in ['Staff']:
+            return {'status': True, 'message': 'Staff user'}
+        return {'status': False, 'message': 'This is staff account credentials!'}
 
 # ========================Authentication Token Serializer End================================
 
@@ -169,20 +178,19 @@ class BasePaymentGateWaySerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ['method_uuid', 'created_at', 'updated_at']
 
-class SmsDeviceKeySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = SmsDeviceKey
-        fields = "__all__"
-        read_only_fields = ["create_at", "updated_ta"]
-        extra_kwargs = {
-            "device_key": {"required": False, "allow_blank": True}
-        }
 
 class StorePaymentMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = StorePaymentMessage
         fields = "__all__"
         read_only_fields = ["id", "create_at"]
+
+class SmsDeviceKeySerializer(serializers.ModelSerializer):
+    # payment_messages = StorePaymentMessageSerializer(many=True, read_only=True)
+    class Meta:
+        model = SmsDeviceKey
+        fields = "__all__"
+        read_only_fields = ["create_at", "updated_ta", "device_key"]
 
 # ========================================User Merchant Model End================================
 # ======================================================================================================

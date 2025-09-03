@@ -122,6 +122,7 @@ class PaymentTransfer(models.Model):
         ('pending', 'Pending'), ('success', 'Success'), ('rejected', 'Rejected'), ('delete', 'Delete')
     )
     merchant = models.ForeignKey(Merchant, on_delete=models.SET_NULL, related_name='payment_transfer', null=True)
+    confirm_by = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='confirmed_payments')
     trx_id = models.CharField(max_length=50, null=True, blank=True)
     trx_uuid = models.CharField(max_length=50, editable=False, unique=True)
     receiver_name = models.CharField(max_length=100)
@@ -139,7 +140,7 @@ class PaymentTransfer(models.Model):
         related_query_name='withdraw'
     )
     
-    ALLOWED_WHEN_PAID = frozenset(('trx_id', 'status'))
+    ALLOWED_WHEN_PAID = frozenset(('trx_id', 'status', 'confirm_by'))
     
     @property
     def wallet_transaction(self):
@@ -173,9 +174,12 @@ class PaymentTransfer(models.Model):
         return wallet_balance >= self.amount
     
     def save(self, *args, **kwargs):
+        if self.confirm_by and self.confirm_by.role.name.lower() != "staff":
+            raise ValidationError("Only users with the 'Staff' role can confirm the payment.")
+        
         self.edit_restricted_method()
         
-        if self.verify_withdraw_amount() is False:
+        if not self.pk and self.verify_withdraw_amount() is False:
             raise ValidationError("Payout amount less then your Wallet balance.")
         
         if not self.trx_uuid:
@@ -250,9 +254,24 @@ class WithdrawRequest(models.Model):
         if original.status.lower() in ['success', 'rejected', 'delete']:
             raise ValidationError(f"This Withdrawal Request is {original.status}. Can't Update!")
     
+    def _as_decimal(self, v):
+        return Decimal(str(v or '0'))
+
+    
     def verify_withdraw_amount(self):
+        fee_value = self._as_decimal(getattr(self.merchant, 'withdraw_fees', 0))
+        fees_type = (getattr(self.merchant, 'fees_type', '') or '').lower()
+        is_percentage = fees_type in ('percentage', 'parcentage')
+        if is_percentage:
+            fee = (self.amount * fee_value) / Decimal('100')
+        elif fees_type == 'flat':
+            fee = fee_value
+        else:
+            fee = (self.amount * Decimal('10')) / Decimal('100')
+        
         wallet_balance = self.merchant.merchant_wallet.balance
-        return wallet_balance >= self.amount
+        print(wallet_balance)
+        return wallet_balance >= self.amount+fee
     
     def save(self, *args, **kwargs):
         self.edit_restricted_method()
@@ -284,7 +303,7 @@ class WithdrawRequest(models.Model):
         defaults = {
             'wallet':   self.merchant.merchant_wallet,
             'merchant': self.merchant,
-            'amount':   self.amount,
+            'net_amount':   self.amount,
             'method':   getattr(self.payment_method, 'method_type', None),
             'status':   status__,
             'trx_id':   self.trx_id,
@@ -376,6 +395,19 @@ class WalletTransaction(models.Model):
             return 'withdraw'
         return None
 
+    
+    def credit_fees_disbursement(self):
+        fee_value = self._as_decimal(getattr(self.merchant, 'deposit_fees', 0))
+        fees_type = (getattr(self.merchant, 'fees_type', '') or '').lower()
+        is_percentage = fees_type in ('percentage', 'parcentage')
+        if is_percentage:
+            self.fee = (self.amount * fee_value) / Decimal('100')
+        elif fees_type == 'flat':
+            self.fee = fee_value
+        else:
+            self.fee = (self.amount * Decimal('10')) / Decimal('100')
+        self.net_amount = self.amount - self.fee
+    
     def fees_disbursement(self):
         if not self.merchant:
             self.fee = Decimal('0')
@@ -385,25 +417,26 @@ class WalletTransaction(models.Model):
         bucket = self._which_fee_bucket()
 
         if bucket == 'deposit':
-            fee_value = self._as_decimal(getattr(self.merchant, 'deposit_fees', 0))
-        elif bucket == 'payout':
-            fee_value = self._as_decimal(getattr(self.merchant, 'payout_fees', 0))
-        elif bucket == 'withdraw':
-            fee_value = self._as_decimal(getattr(self.merchant, 'withdraw_fees', 0))
+            self.credit_fees_disbursement()
         else:
-            fee_value = self._as_decimal(getattr(self.merchant, 'deposit_fees', 0))
-        
-        fees_type = (getattr(self.merchant, 'fees_type', '') or '').lower()
-        is_percentage = fees_type in ('percentage', 'parcentage')
-
-        if is_percentage:
-            self.fee = (self.amount * fee_value) / Decimal('100')
-        elif fees_type == 'flat':
-            self.fee = fee_value
-        else:
-            self.fee = (self.amount * Decimal('10')) / Decimal('100')
-
-        self.net_amount = self.amount - self.fee
+            if bucket == 'payout':
+                fee_value = self._as_decimal(getattr(self.merchant, 'payout_fees', 0))
+            elif bucket == 'withdraw':
+                fee_value = self._as_decimal(getattr(self.merchant, 'withdraw_fees', 0))
+            else:
+                fee_value = 5
+            
+            fees_type = (getattr(self.merchant, 'fees_type', '') or '').lower()
+            is_percentage = fees_type in ('percentage', 'parcentage')
+            
+            if is_percentage:
+                self.fee = (self.net_amount * fee_value) / Decimal('100')
+            elif fees_type == 'flat':
+                self.fee = fee_value
+            else:
+                self.fee = (self.amount * Decimal('10')) / Decimal('100')
+            
+            self.amount = self.net_amount + self.fee
     
     @transaction.atomic
     def save(self, *args, **kwargs):
@@ -418,9 +451,6 @@ class WalletTransaction(models.Model):
         original = self._get_original()
         prev_status = (original.status.lower() if original and original.status else None)
         prev_amount = (self._as_decimal(original.amount) if original else None)
-        # prev_status = (original.status.lower() if original and original.status else None)
-        # prev_amount = (self._as_decimal(original.amount) if original else None)
-        # prev_tran   = (original.tran_type.lower() if original and original.tran_type else None)
                
         new_status = (self.status or '').lower()
         new_tran   = (self.tran_type or '').lower()
@@ -507,7 +537,7 @@ class WalletTransaction(models.Model):
                 kwargs.pop('update_fields', None)
             else:
                 update_fields = set(update_fields)
-                update_fields.update({'fee', 'net_amount', 'current_balance'})
+                update_fields.update({'fee', 'net_amount', 'amount' 'current_balance'})
                 if not self.previous_balance:
                     update_fields.add('previous_balance')
                 kwargs['update_fields'] = update_fields

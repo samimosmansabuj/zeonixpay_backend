@@ -1,10 +1,10 @@
 from .serializers import InvoiceSerializer, PaymentTransferSerializer, WithdrawRequestSerializer, WalletTransactionSerializer, UserPaymentMethodSerializer
 from .utils import CustomPaymentSectionViewsets, DataEncryptDecrypt, CustomPagenumberpagination, build_logo_url
 from rest_framework.exceptions import NotFound, ValidationError, AuthenticationFailed
-from authentication.models import Merchant, APIKey, UserPaymentMethod
+from authentication.models import Merchant, APIKey, UserPaymentMethod, StorePaymentMessage
 from .models import Invoice, PaymentTransfer, WithdrawRequest, WalletTransaction
 from rest_framework.decorators import api_view, permission_classes
-from authentication.permissions import MerchantCreatePermission
+from authentication.permissions import MerchantCreatePermission, StaffUpdatePermission
 from authentication.serializers import MerchantWalletSerializer
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 import os
 import json
 load_dotenv()
+from django.db.models import Q
 
 
 
@@ -368,6 +369,24 @@ class InvoiceViewSet(CustomPaymentSectionViewsets):
     not_found_message = "No Invoice Object Found!"
     ordering_by = "-id"
     
+    def get_queryset(self):
+        merchant = self.get_merchant()
+        if merchant:
+            return self.model.objects.filter(merchant=merchant).order_by(self.ordering_by)
+        else:
+            if self.get_user().role.name.lower() == 'admin':
+                return self.queryset
+            elif self.get_user().role.name.lower() == 'staff':
+                staff_all_device = self.get_user().staff_device_key.all()
+                verified_invoices = StorePaymentMessage.objects.filter(
+                    device__in=staff_all_device,
+                    is_verified=True,
+                    verified_invoice__isnull=False
+                ).values_list('verified_invoice', flat=True).distinct()
+                return self.model.objects.filter(id__in=verified_invoices)
+            else:
+                return None
+    
     def get_object(self):
         try:
             return self.get_queryset().get(invoice_payment_id=self.kwargs.get('invoice_payment_id'))
@@ -571,7 +590,7 @@ class UserPaymentMethodView(CustomPaymentSectionViewsets):
 
 class PayOutViewSet(CustomPaymentSectionViewsets):
     queryset = PaymentTransfer.objects.all()
-    permission_classes = [IsAuthenticated, MerchantCreatePermission]
+    permission_classes = [IsAuthenticated, StaffUpdatePermission]
     serializer_class = PaymentTransferSerializer
     
     model = PaymentTransfer
@@ -583,6 +602,20 @@ class PayOutViewSet(CustomPaymentSectionViewsets):
     ordering_by = "-created_at"
     lookup_field = 'trx_uuid'
     
+    def get_queryset(self):
+        merchant = self.get_merchant()
+        if merchant:
+            return self.model.objects.filter(merchant=merchant).order_by(self.ordering_by)
+        else:
+            if self.get_user().role.name.lower() == 'admin':
+                return self.queryset
+            elif self.get_user().role.name.lower() == 'staff':
+                
+                return self.model.objects.filter(Q(confirm_by=self.get_user()) | Q(status="pending"))
+            else:
+                return None
+    
+    
     def create(self, request, *args, **kwargs):
         return Response(
             {
@@ -591,10 +624,28 @@ class PayOutViewSet(CustomPaymentSectionViewsets):
             }
         )
     
+    def perform_update(self, serializer):
+        if self.request.user.role.name.lower() == "staff":
+            trx_id = serializer.validated_data.get("trx_id")
+            status = serializer.validated_data.get("status")
+            if trx_id and status.lower() == "success":
+                return serializer.save(confirm_by=self.request.user)
+            return serializer.save()
+        elif self.request.user.role.name.lower() == "admin":
+            selected_confirm_by = serializer.validated_data.get('confirm_by')            
+            if selected_confirm_by is None:
+                raise Exception("Confirm By field cannot be None.")
+            
+            if selected_confirm_by.role.name.lower() != "staff":
+                raise Exception("Admin must select a Confirm By Staff user to assign the confirm payout.")
+            return serializer.save()
+        else:
+            raise Exception("Only Staff can confirm payout.")
+    
     def get_object(self):
         try:
-            return self.get_queryset().get(trx_uuid=self.kwargs.get('trx_uuid'))
-        except self.model.DoesNotExist:
+            return PaymentTransfer.objects.get(trx_uuid=self.kwargs.get('trx_uuid'))
+        except PaymentTransfer.DoesNotExist:
             raise NotFound(self.not_found_message)
     
     def destroy_response(self, object):
@@ -632,6 +683,19 @@ class WalletTransactionViewSet(viewsets.ReadOnlyModelViewSet):
             user = self.request.user
             if user.role.name.lower() == 'admin':
                 return self.model.objects.all()
+            else:
+                return None
+    
+    def get_queryset(self):
+        merchant = self.get_merchant()
+        if merchant:
+            return self.model.objects.filter(merchant=merchant).order_by(self.ordering_by)
+        else:
+            if self.get_user().role.name.lower() == 'admin':
+                return self.queryset
+            elif self.get_user().role.name.lower() == 'staff':
+                
+                return self.model.objects.filter(Q(confirm_by=self.get_user()) | Q(status="pending"))
             else:
                 return None
     

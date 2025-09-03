@@ -20,6 +20,7 @@ urlpatterns = [
     # Login URL===============================================================================
     path('auth/merchant/login/', MerchantLoginView.as_view(), name='merchant-login'),
     path('auth/admin/login/', AdminLoginView.as_view(), name='admin-login'),
+    path('auth/staff/login/', StaffLoginView.as_view(), name='staff-login'),
     
     # Token Related===========================================================================
     path('auth/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
@@ -43,6 +44,7 @@ urlpatterns = [
     
     path('admin/', include(router.urls)),
     
+    #Device API
     path("store-payment-messages/", StorePaymentMessageCreateView.as_view(), name="store-payment-message-create"),
     path("device-verify/", VerifyDeviceKeyAPIView.as_view(), name="device-verify"),
     

@@ -50,6 +50,7 @@ class PaymentTransferAdmin(admin.ModelAdmin):
         "trx_uuid",
         "trx_id",
         "merchant",
+        "confirm_by",
         "receiver_name",
         "receiver_number",
         "amount",

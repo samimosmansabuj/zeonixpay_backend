@@ -243,7 +243,7 @@ class BasePaymentGateWayAdmin(admin.ModelAdmin):
 
 @admin.register(SmsDeviceKey)
 class SmsDeviceKeyAdmin(admin.ModelAdmin):
-    list_display = ("id", "device_name", "device_key", "is_active", "create_at", "updated_ta")
+    list_display = ("id", "user", "device_name", "device_key", "is_active", "create_at", "updated_ta")
     list_filter = ("is_active", "create_at")
     search_fields = ("device_name", "device_key")
     ordering = ("-create_at",)
