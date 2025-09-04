@@ -52,6 +52,7 @@ class WithdrawRequestSerializer(serializers.ModelSerializer):
 
 
 class WalletTransactionSerializer(serializers.ModelSerializer):
+    source = serializers.SerializerMethodField(read_only=True)
     store_name = serializers.SerializerMethodField()
     class Meta:
         model = WalletTransaction
@@ -59,6 +60,17 @@ class WalletTransactionSerializer(serializers.ModelSerializer):
     
     def get_store_name(self, obj):
         return obj.merchant.brand_name
+    
+    def get_source(self, obj):
+        content_type = obj.content_type
+        if content_type:
+            if content_type.model == 'paymenttransfer':
+                return 'Payout'
+            elif content_type.model == 'withdrawrequest':
+                return 'Withdraw'
+            elif content_type.model == 'invoice':
+                return 'Deposit'
+        return None
     
 
 class UserPaymentMethodSerializer(serializers.ModelSerializer):

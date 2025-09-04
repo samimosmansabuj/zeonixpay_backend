@@ -169,9 +169,24 @@ class PaymentTransfer(models.Model):
         if changed - self.ALLOWED_WHEN_PAID:
             raise ValidationError("Only Transaction & Status can update!")
     
+    
+    def _as_decimal(self, v):
+        return Decimal(str(v or '0'))
+
+    
     def verify_withdraw_amount(self):
+        fee_value = self._as_decimal(getattr(self.merchant, 'payout_fees', 0))
+        fees_type = (getattr(self.merchant, 'fees_type', '') or '').lower()
+        is_percentage = fees_type in ('percentage', 'parcentage')
+        if is_percentage:
+            fee = (self.amount * fee_value) / Decimal('100')
+        elif fees_type == 'flat':
+            fee = fee_value
+        else:
+            fee = (self.amount * Decimal('10')) / Decimal('100')
+        
         wallet_balance = self.merchant.merchant_wallet.balance
-        return wallet_balance >= self.amount
+        return wallet_balance >= self.amount+fee
     
     def save(self, *args, **kwargs):
         if self.confirm_by and self.confirm_by.role.name.lower() != "staff":
@@ -196,12 +211,13 @@ class PaymentTransfer(models.Model):
         ct = ContentType.objects.get_for_model(self.__class__)
         
         defaults = {
-            'wallet':   self.merchant.merchant_wallet,
+            'wallet': self.merchant.merchant_wallet,
             'merchant': self.merchant,
-            'amount':   self.amount,
-            'method':   getattr(self.payment_method, 'method_type', None),
-            'status':   'success' if str(self.status).lower() == 'success' and self.trx_id else 'pending',
-            'trx_id':   self.trx_id,
+            'net_amount': self.amount,
+            # 'method': getattr(self.payment_method, 'method_type', None),
+            'method': self.payment_method,
+            'status': 'success' if str(self.status).lower() == 'success' and self.trx_id else 'pending',
+            'trx_id': self.trx_id,
         }
         
         WalletTransaction.objects.update_or_create(
@@ -537,7 +553,7 @@ class WalletTransaction(models.Model):
                 kwargs.pop('update_fields', None)
             else:
                 update_fields = set(update_fields)
-                update_fields.update({'fee', 'net_amount', 'amount' 'current_balance'})
+                update_fields.update({'fee', 'net_amount', 'amount', 'current_balance'})
                 if not self.previous_balance:
                     update_fields.add('previous_balance')
                 kwargs['update_fields'] = update_fields

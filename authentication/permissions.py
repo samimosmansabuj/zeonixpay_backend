@@ -34,3 +34,11 @@ class StaffUpdatePermission(BasePermission):
         user = request.user
         return user.is_authenticated and user.role.name in ['Staff', 'Admin']
 
+class AdminUpdatePermission(BasePermission):
+    def has_permission(self, request, view):
+        if request.method in ["PATCH", "PUT"] and request.user.role.name in ["Admin", "Merchant"]:
+            return True
+        # return request.user.role.name == 'Merchant' and request.method in SAFE_METHODS
+        return False
+
+

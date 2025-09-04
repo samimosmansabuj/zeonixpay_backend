@@ -4,7 +4,7 @@ from rest_framework.exceptions import NotFound, ValidationError, AuthenticationF
 from authentication.models import Merchant, APIKey, UserPaymentMethod, StorePaymentMessage
 from .models import Invoice, PaymentTransfer, WithdrawRequest, WalletTransaction
 from rest_framework.decorators import api_view, permission_classes
-from authentication.permissions import MerchantCreatePermission, StaffUpdatePermission
+from authentication.permissions import MerchantCreatePermission, StaffUpdatePermission, AdminUpdatePermission
 from authentication.serializers import MerchantWalletSerializer
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -455,8 +455,9 @@ class InvoiceViewSet(CustomPaymentSectionViewsets):
 
 
 class WithdrawRequestViewSet(CustomPaymentSectionViewsets):
-    queryset = WithdrawRequest.objects.all()
+    queryset = WithdrawRequest.objects.none()
     permission_classes = [IsAuthenticated, MerchantCreatePermission]
+    update_permission_classes = [IsAuthenticated, AdminUpdatePermission]
     serializer_class = WithdrawRequestSerializer
     
     model = WithdrawRequest
@@ -467,6 +468,12 @@ class WithdrawRequestViewSet(CustomPaymentSectionViewsets):
     create_permission_denied_message = 'Only Merchant user can Request for Withdraw!'
     ordering_by = "-created_at"
     lookup_field = 'trx_uuid'
+    
+    def get_permissions(self):
+        print(self.action)
+        if self.action in ["update", "partial_update"]:
+            return [permission() for permission in self.update_permission_classes]
+        return [permission() for permission in self.permission_classes]
     
     def get_object(self):
         try:
@@ -486,6 +493,68 @@ class WithdrawRequestViewSet(CustomPaymentSectionViewsets):
             )
         return f"This Withdrawal Request is {object.status}. Can't Delete!", None
 
+    def update(self, request, *args, **kwargs):
+        try:
+            instance = self.get_object()
+            user = request.user
+            if user.role.name == 'Admin':
+                serializer = self.get_serializer(instance, data=request.data, partial=True)
+            elif user.role.name == 'Merchant':
+                data = request.data.copy()
+                if "status" in data or "trx_id" in data:
+                    return Response(
+                        {
+                            "status": False,
+                            "message": "Merchant users cannot update status or trx_id."
+                        }, status=status.HTTP_400_BAD_REQUEST
+                    )
+                serializer = self.get_serializer(instance, data=data, partial=True)
+            else:
+                return Response(
+                    {
+                        "status": False,
+                        "message": "You do not have permission to update this request."
+                    }, status=status.HTTP_400_BAD_REQUEST
+                )
+
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+
+            return Response(
+                {
+                    'status': True,
+                    'message': self.update_success_message,
+                    'data': serializer.data
+                },
+                status=status.HTTP_200_OK
+            )
+        
+        except ValidationError:
+            error = {key: str(value[0]) for key, value in serializer.errors.items()}
+            return Response(
+                {
+                    'status': False,
+                    'error': error
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        except NotFound as e:
+            return Response(
+                {
+                    'status': False,
+                    'error': str(e)
+                },
+                status=status.HTTP_404_NOT_FOUND
+            ) 
+        
+        except Exception as e:
+            return Response(
+                {
+                    'status': False,
+                    'message': str(e),
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class UserPaymentMethodView(CustomPaymentSectionViewsets):
     queryset = UserPaymentMethod.objects.none
@@ -662,7 +731,7 @@ class PayOutViewSet(CustomPaymentSectionViewsets):
 
 
 class WalletTransactionViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = WalletTransaction.objects.none
+    queryset = WalletTransaction.objects.none()
     serializer_class = WalletTransactionSerializer
     pagination_class = CustomPagenumberpagination
     permission_classes = [IsAuthenticated]
@@ -677,25 +746,26 @@ class WalletTransactionViewSet(viewsets.ReadOnlyModelViewSet):
     
     def get_queryset(self):
         merchant = self.get_merchant()
+        user = self.request.user
         if merchant:
             return self.model.objects.filter(merchant=merchant).order_by(self.ordering_by)
         else:
-            user = self.request.user
             if user.role.name.lower() == 'admin':
-                return self.model.objects.all()
-            else:
-                return None
-    
-    def get_queryset(self):
-        merchant = self.get_merchant()
-        if merchant:
-            return self.model.objects.filter(merchant=merchant).order_by(self.ordering_by)
-        else:
-            if self.get_user().role.name.lower() == 'admin':
-                return self.queryset
-            elif self.get_user().role.name.lower() == 'staff':
+                return self.model.objects.all().order_by(self.ordering_by)
+            elif user.role.name.lower() == 'staff':
+                payment_transfer_qs = PaymentTransfer.objects.filter(confirm_by=user).values('id')
+                payment_transfer_qs = Q(content_type__model='paymenttransfer', object_id__in=payment_transfer_qs)
                 
-                return self.model.objects.filter(Q(confirm_by=self.get_user()) | Q(status="pending"))
+                verified_invoices = StorePaymentMessage.objects.filter(
+                    device__in=user.staff_device_key.all(),
+                    is_verified=True,
+                    verified_invoice__isnull=False
+                ).values_list('verified_invoice', flat=True).distinct()
+                invoice_qs = Invoice.objects.filter(id__in=verified_invoices).values('id')
+                invoice_qs = Q(content_type__model='invoice', object_id__in=invoice_qs)
+                
+                combined_qs = payment_transfer_qs | invoice_qs
+                return self.model.objects.filter(combined_qs).order_by(self.ordering_by)
             else:
                 return None
     
@@ -777,11 +847,11 @@ class WalletTransactionViewSet(viewsets.ReadOnlyModelViewSet):
     
     def retrieve(self, request, *args, **kwargs):
         try:
-            instance = self.get_object()
+            instance = self.get_serializer(self.get_object()).data
             return Response(
                 {
                     'status': True,
-                    'data': self.get_serializer(instance).data
+                    'data': instance
                 }, status=status.HTTP_200_OK
             )
         except NotFound as e:
