@@ -92,9 +92,9 @@ class CustomPaymentSectionViewsets(viewsets.ModelViewSet):
             return self.model.objects.filter(merchant=merchant).order_by(self.ordering_by)
         else:
             if self.get_user().role.name.lower() == 'admin':
-                return self.queryset
+                return self.model.objects.all().order_by(self.ordering_by)
             else:
-                return None
+                return self.queryset
     
     
     #-------------Created-------------------------------
