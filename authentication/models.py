@@ -68,9 +68,9 @@ class Merchant(models.Model):
     brand_logo = models.ImageField(upload_to='brand-logo', blank=True, null=True)
     status = models.CharField(max_length=20, choices=(('Active', 'Active'), ('Inactive', 'Inactive')), default='Active')
     fees_type = models.CharField(max_length=10, choices=(('Flat', 'Flat'), ('Parcentage', 'Parcentage')), default='Parcentage')
-    deposit_fees = models.DecimalField(max_digits=4, decimal_places=2, default=5)
-    payout_fees = models.DecimalField(max_digits=4, decimal_places=2, default=5)
-    withdraw_fees = models.DecimalField(max_digits=4, decimal_places=2, default=5)
+    deposit_fees = models.DecimalField(max_digits=4, decimal_places=2)
+    payout_fees = models.DecimalField(max_digits=4, decimal_places=2)
+    withdraw_fees = models.DecimalField(max_digits=4, decimal_places=2)
     is_active = models.BooleanField(default=True)
     
     def genereate_merchant_id(self):

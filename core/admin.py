@@ -104,6 +104,7 @@ class WalletTransactionAdmin(admin.ModelAdmin):
         "merchant",
         "wallet",
         "amount",
+        "fee",
         "method",
         "status",
         "tran_type",

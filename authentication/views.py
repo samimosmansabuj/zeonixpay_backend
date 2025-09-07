@@ -201,6 +201,7 @@ class OnlyMerchantProfileAPIView(generics.RetrieveUpdateAPIView):
     
     def put(self, request, *args, **kwargs):
         merchant = request.user.merchant
+        print("***: ", request.data)
         serializer = MerchantSerializer(merchant, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -453,6 +454,9 @@ class AdminStaffUserList(CustomMerchantUserViewsets):
 class MerchatUserList(CustomMerchantUserViewsets):
     queryset = CustomUser.objects.filter(role__name="Merchant")
     serializer_class = MerchantUserListSerializer
+    update_success_message = " Merchant User Profile Updated!"
+    delete_success_message = "Merchant User Profile Deleted!"
+    not_found_message = "Merchant User Profile Object Not Found!"
     
     def update(self, request, *args, **kwargs):
         try:

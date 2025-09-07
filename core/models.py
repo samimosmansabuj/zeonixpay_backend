@@ -36,6 +36,7 @@ class Invoice(models.Model):
     customer_description = models.TextField(blank=True, null=True)
     method = models.CharField(max_length=50, blank=True, null=True)
     payment_gateway = models.ForeignKey(BasePaymentGateWay, on_delete=models.SET_NULL, blank=True, null=True, related_name='invoices')
+    note = models.TextField(blank=True, null=True)
     
     
     status = models.CharField(max_length=15, choices=STATUS, default='active')
@@ -132,6 +133,7 @@ class PaymentTransfer(models.Model):
     payment_details = models.JSONField()
     status = models.CharField(choices=STATUS, default='pending', max_length=10)
     created_at = models.DateTimeField(auto_now_add=True)
+    note = models.TextField(blank=True, null=True)
     
     transaction_rel = GenericRelation(
         'WalletTransaction',
@@ -247,6 +249,7 @@ class WithdrawRequest(models.Model):
     trx_uuid = models.CharField(max_length=50, editable=False, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    note = models.TextField(blank=True, null=True)
     
     transaction_rel = GenericRelation(
         'WalletTransaction',

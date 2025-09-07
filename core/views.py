@@ -17,7 +17,11 @@ from dotenv import load_dotenv
 import os
 import json
 load_dotenv()
-from django.db.models import Q
+from django.db.models import Q, Sum, Value
+from django.db.models.functions import Coalesce
+from decimal import Decimal
+from .filters import InvoiceFilter, WithdrawRequestFilter, PaymentTransferFilter, UserPaymentMethodFilter
+
 
 
 
@@ -363,11 +367,40 @@ class InvoiceViewSet(CustomPaymentSectionViewsets):
     model = Invoice
     lookup_field = 'invoice_payment_id'
     
+    search_fields = [
+        'invoice_payment_id', 'customer_name', 'customer_number',
+        'customer_email', 'customer_address', 'customer_description',
+        'transaction_id', 'invoice_trxn', 'method', 'note'
+    ]
+    ordering_fields = ['created_at', 'customer_amount', 'status', 'pay_status', 'id']
+    filterset_class = InvoiceFilter
+    
     create_success_message = "Invoice Created!"
     update_success_message = "Invoice Updated!"
     delete_success_message = "Invoice Deleted!"
     not_found_message = "No Invoice Object Found!"
-    ordering_by = "-id"
+    # ordering_by = "-id"
+    
+    def get_total_amount(self, queryset):
+        total_amount = queryset.aggregate(total=Sum("customer_amount"))["total"] or 0
+        status_sums = (
+            queryset.values("pay_status")
+            .annotate(total=Sum("customer_amount"))
+            .order_by()
+        )
+        reseult = {
+            "total_amount": total_amount,
+            "paid_amount": 0,
+            "pending_amount": 0,
+            "unpaid_amount": 0,
+            "failed_amount": 0,
+            "cancelled_amount": 0,
+        }
+        for row in status_sums:
+            key = f"{row["pay_status"]}_amount"
+            reseult[key] = row["total"] or 0
+        
+        return reseult
     
     def get_queryset(self):
         merchant = self.get_merchant()
@@ -453,12 +486,15 @@ class InvoiceViewSet(CustomPaymentSectionViewsets):
             )
         return f"This Invoice is {object.status}. Can't Delete!", None
 
-
 class WithdrawRequestViewSet(CustomPaymentSectionViewsets):
     queryset = WithdrawRequest.objects.none()
     permission_classes = [IsAuthenticated, MerchantCreatePermission]
     update_permission_classes = [IsAuthenticated, AdminUpdatePermission]
     serializer_class = WithdrawRequestSerializer
+    
+    search_fields = ['trx_id', 'trx_uuid', 'message', 'note']
+    ordering_fields = ['created_at', 'updated_at', 'amount', 'status', 'id']
+    filterset_class = WithdrawRequestFilter
     
     model = WithdrawRequest
     create_success_message = "Withdraw Request Submit!"
@@ -474,6 +510,26 @@ class WithdrawRequestViewSet(CustomPaymentSectionViewsets):
         if self.action in ["update", "partial_update"]:
             return [permission() for permission in self.update_permission_classes]
         return [permission() for permission in self.permission_classes]
+    
+    def get_total_amount(self, queryset):
+        total_amount = queryset.aggregate(total=Sum("amount"))["total"] or 0
+        status_sums = (
+            queryset.values("status")
+            .annotate(total=Sum("amount"))
+            .order_by()
+        )
+        reseult = {
+            "total_amount": total_amount,
+            "pending_amount": 0,
+            "success_amount": 0,
+            "rejected_amount": 0,
+            "delete_amount": 0
+        }
+        for row in status_sums:
+            key = f"{row["status"]}_amount"
+            reseult[key] = row["total"] or 0
+        
+        return reseult
     
     def get_object(self):
         try:
@@ -561,6 +617,10 @@ class UserPaymentMethodView(CustomPaymentSectionViewsets):
     permission_classes = [IsAuthenticated, MerchantCreatePermission]
     serializer_class = UserPaymentMethodSerializer
     
+    search_fields = ['method_type']
+    ordering_fields = ['created_at', 'status', 'is_primary', 'id']
+    filterset_class = UserPaymentMethodFilter
+    
     model = UserPaymentMethod
     create_success_message = "Payment Method Created!"
     update_success_message = "Payment Method Updated!"
@@ -569,6 +629,10 @@ class UserPaymentMethodView(CustomPaymentSectionViewsets):
     create_permission_denied_message = 'Only Merchant user can Add Payment Method!'
     ordering_by = "-created_at"
     lookup_field = 'pk'
+    
+    
+    def get_total_amount(self, queryset):
+        return None
     
     def get_queryset(self):
         merchant = self.get_merchant()
@@ -656,11 +720,16 @@ class UserPaymentMethodView(CustomPaymentSectionViewsets):
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-
 class PayOutViewSet(CustomPaymentSectionViewsets):
     queryset = PaymentTransfer.objects.all()
     permission_classes = [IsAuthenticated, StaffUpdatePermission]
     serializer_class = PaymentTransferSerializer
+    
+    search_fields = [
+        'trx_id', 'trx_uuid', 'receiver_name', 'receiver_number', 'note'
+    ]
+    ordering_fields = ['created_at', 'amount', 'status', 'payment_method', 'id']
+    filterset_class = PaymentTransferFilter
     
     model = PaymentTransfer
     create_success_message = "Payout Created!"
@@ -670,6 +739,26 @@ class PayOutViewSet(CustomPaymentSectionViewsets):
     create_permission_denied_message = 'Only Merchant user can request for Payout!'
     ordering_by = "-created_at"
     lookup_field = 'trx_uuid'
+    
+    def get_total_amount(self, queryset):
+        total_amount = queryset.aggregate(total=Sum("amount"))["total"] or 0
+        status_sums = (
+            queryset.values("status")
+            .annotate(total=Sum("amount"))
+            .order_by()
+        )
+        reseult = {
+            "total_amount": total_amount,
+            "pending_amount": 0,
+            "success_amount": 0,
+            "rejected_amount": 0,
+            "delete_amount": 0
+        }
+        for row in status_sums:
+            key = f"{row["status"]}_amount"
+            reseult[key] = row["total"] or 0
+        
+        return reseult
     
     def get_queryset(self):
         merchant = self.get_merchant()
@@ -683,7 +772,6 @@ class PayOutViewSet(CustomPaymentSectionViewsets):
                 return self.model.objects.filter(Q(confirm_by=self.get_user()) | Q(status="pending"))
             else:
                 return None
-    
     
     def create(self, request, *args, **kwargs):
         return Response(
@@ -728,7 +816,6 @@ class PayOutViewSet(CustomPaymentSectionViewsets):
                 }, status=status.HTTP_200_OK
             )
         return f"This Payout Request is {object.status}. Can't Delete!", None
-
 
 class WalletTransactionViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = WalletTransaction.objects.none()
@@ -875,22 +962,108 @@ class WalletTransactionViewSet(viewsets.ReadOnlyModelViewSet):
 @permission_classes([IsAuthenticated])
 def WalletOverView(request):
     user = request.user
-    if user.merchant:
-        wallet = user.merchant.merchant_wallet
-        serializer = MerchantWalletSerializer(wallet)
+    role = (getattr(getattr(user, 'role', None), 'name', '') or '').lower()
+    
+    wallet_data = None
+    dashboard = None
+    zero = Value(Decimal('0.00'))
+    
+    if role == "merchant":
+        merchant = Merchant.objects.filter(user=user).select_related('merchant_wallet').first()
+        if not merchant:
+            return Response({'status': True, 'wallet': None, 'dashboard_accountant_card': None})
+        
+        if getattr(merchant, 'merchant_wallet', None):
+            wallet_data = MerchantWalletSerializer(merchant.merchant_wallet).data
+                
+        invoice_total = Invoice.objects.filter(merchant=merchant)\
+            .exclude(status__iexact='delete')\
+            .aggregate(total=Coalesce(Sum('customer_amount'), zero))['total']
+        
+        pending_invoice_total = Invoice.objects.filter(merchant=merchant)\
+            .exclude(status__iexact='delete')\
+            .filter(pay_status__in=['pending', 'unpaid'])\
+            .aggregate(total=Coalesce(Sum('customer_amount'), zero))['total']
+        
+        withdraw_total = WithdrawRequest.objects.filter(merchant=merchant)\
+            .exclude(status__iexact='delete')\
+            .aggregate(total=Coalesce(Sum('amount'), zero))['total']
+        
+        payout_total = PaymentTransfer.objects.filter(merchant=merchant)\
+            .exclude(status__iexact='delete')\
+            .aggregate(total=Coalesce(Sum('amount'), zero))['total']
+        
+        dashboard = {
+            "invoice_amount": invoice_total,
+            "pending_invoice_amount": pending_invoice_total,
+            "withdrawrequest_amount": withdraw_total,
+            "payout_amount": payout_total,
+        }
+        
         return Response(
             {
                 'status': True,
-                'data': serializer.data
+                'wallet': wallet_data,
+                'dashboard_accountant_card': dashboard
             }
         )
+    elif role == "staff":
+        confirmed_payout_amount = (PaymentTransfer.objects
+                                   .filter(confirm_by=user)
+                                   .exclude(status__iexact='delete')
+                                   .aggregate(total=Coalesce(Sum('amount'), zero))['total'])
+        
+        staff_devices = user.staff_device_key.all()
+        verified_invoice_ids = (StorePaymentMessage.objects
+                                .filter(device__in=staff_devices, is_verified=True)
+                                .exclude(verified_invoice__isnull=True)
+                                .values_list('verified_invoice', flat=True)
+                                .distinct())
+        verified_invoice_amount = (Invoice.objects
+                                   .filter(id__in=verified_invoice_ids)
+                                   .exclude(status__iexact='delete')
+                                   .aggregate(total=Coalesce(Sum('customer_amount'), zero))['total'])
+        dashboard = {
+            "confirmed_payout_amount": confirmed_payout_amount,
+            "verified_invoice_amount": verified_invoice_amount,
+        }
+        return Response({'status': True, 'wallet': None, 'dashboard_accountant_card': dashboard})
+    elif role == "admin":        
+        withdraw_total = WithdrawRequest.objects.exclude(status__iexact='delete')\
+            .aggregate(total=Coalesce(Sum('amount'), zero))['total']
+
+        payout_total = PaymentTransfer.objects.exclude(status__iexact='delete')\
+            .aggregate(total=Coalesce(Sum('amount'), zero))['total']
+
+        pending_withdraw_total = WithdrawRequest.objects.filter(status__iexact='pending')\
+            .aggregate(total=Coalesce(Sum('amount'), zero))['total']
+
+        pending_payout_total = PaymentTransfer.objects.filter(status__iexact='pending')\
+            .aggregate(total=Coalesce(Sum('amount'), zero))['total']
+
+        wallet_fee_total = WalletTransaction.objects.aggregate(total=Coalesce(Sum('fee'), zero))['total']
+
+        dashboard = {
+            "withdrawrequest_amount": withdraw_total,
+            "paymenttransfer_amount": payout_total,
+            "pending_withdrawrequest_amount": pending_withdraw_total,
+            "pending_paymenttransfer_amount": pending_payout_total,
+            "wallettransaction_fee_amount": wallet_fee_total,
+        }
+
+        return Response({
+            'status': True,
+            'wallet': None,
+            'dashboard_accountant_card': dashboard
+        })
     else:
         return Response(
             {
                 'status': True,
-                'data': None
+                'data': "Wrong User!"
             }
         )
+
 
 # ===============================================================================================
 # ====================Merchant & Admin Dashboard API View End===================================
