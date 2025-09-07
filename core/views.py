@@ -397,7 +397,7 @@ class InvoiceViewSet(CustomPaymentSectionViewsets):
             "cancelled_amount": 0,
         }
         for row in status_sums:
-            key = f"{row["pay_status"]}_amount"
+            key = f"{row['pay_status']}_amount"
             reseult[key] = row["total"] or 0
         
         return reseult
@@ -526,7 +526,7 @@ class WithdrawRequestViewSet(CustomPaymentSectionViewsets):
             "delete_amount": 0
         }
         for row in status_sums:
-            key = f"{row["status"]}_amount"
+            key = f"{row['status']}_amount"
             reseult[key] = row["total"] or 0
         
         return reseult
@@ -755,7 +755,7 @@ class PayOutViewSet(CustomPaymentSectionViewsets):
             "delete_amount": 0
         }
         for row in status_sums:
-            key = f"{row["status"]}_amount"
+            key = f"{row['status']}_amount"
             reseult[key] = row["total"] or 0
         
         return reseult
