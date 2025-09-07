@@ -8,6 +8,8 @@ from rest_framework import viewsets
 from rest_framework import status
 import json
 import base64
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter, OrderingFilter
 
 class DataEncryptDecrypt:
     def __init__(self, key=None):
@@ -63,6 +65,7 @@ class CustomPagenumberpagination(PageNumberPagination):
 class CustomPaymentSectionViewsets(viewsets.ModelViewSet):
     permission_classes = [IsOwnerByUser]
     pagination_class = CustomPagenumberpagination
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     
     model = None
     create_success_message = "Created!"
@@ -147,6 +150,9 @@ class CustomPaymentSectionViewsets(viewsets.ModelViewSet):
                 }
             )
         
+        queryset = self.filter_queryset(queryset)
+        total_amount = self.get_total_amount(queryset)
+                
         all_items = request.query_params.get('all', 'false').lower() == 'true'
         # page_size = request.query_params.get(self.pagination_class.page_size_query_param)
         
@@ -159,6 +165,7 @@ class CustomPaymentSectionViewsets(viewsets.ModelViewSet):
                     {
                         'status': True,
                         'count': len(response.data),
+                        'total_amount': total_amount,
                         'data': response.data
                     },
                     status=status.HTTP_200_OK
@@ -181,6 +188,7 @@ class CustomPaymentSectionViewsets(viewsets.ModelViewSet):
                     'count': self.paginator.page.paginator.count,
                     'next': self.paginator.get_next_link(),
                     'previous': self.paginator.get_previous_link(),
+                    'total_amount': total_amount,
                     'data': response.data
                 },
                 status=status.HTTP_200_OK
@@ -192,6 +200,7 @@ class CustomPaymentSectionViewsets(viewsets.ModelViewSet):
                     {
                         'status': True,
                         'count': len(response.data),
+                        'total_amount': total_amount,
                         'data': response.data
                     },
                     status=status.HTTP_200_OK

@@ -41,7 +41,6 @@ urlpatterns = [
     path("app/keys/<int:pk>/", APIKeyDetailAPIView.as_view(), name="api-key-detail"),
     
     
-    
     path('admin/', include(router.urls)),
     
     #Device API

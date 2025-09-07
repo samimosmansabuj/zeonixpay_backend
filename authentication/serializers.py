@@ -71,6 +71,13 @@ class MerchantRegistrationSerializer(serializers.ModelSerializer):
         required=False,
     )
     brand_logo = serializers.FileField(required=False, allow_null=True)
+    fees_type = serializers.ChoiceField(
+        choices=(("Flat", "Flat"), ("Parcentage", "Parcentage")),
+        default="Parcentage"
+    )
+    deposit_fees = serializers.DecimalField(max_digits=4, decimal_places=2)
+    payout_fees = serializers.DecimalField(max_digits=4, decimal_places=2)
+    withdraw_fees = serializers.DecimalField(max_digits=4, decimal_places=2)
 
     username = serializers.CharField(
         required=True,
@@ -104,6 +111,7 @@ class MerchantRegistrationSerializer(serializers.ModelSerializer):
             "username", "email", "password", "first_name", "last_name", "phone_number",
             # merchant
             "brand_name", "whatsapp_number", "domain_name", "brand_logo",
+            "fees_type", "deposit_fees", "payout_fees", "withdraw_fees",
         )
 
     def validate_username(self, value):
@@ -117,6 +125,10 @@ class MerchantRegistrationSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
+        fees_type = validated_data.pop("fees_type", None)
+        deposit_fees = validated_data.pop("deposit_fees", None)
+        payout_fees = validated_data.pop("payout_fees", None)
+        withdraw_fees = validated_data.pop("withdraw_fees", None)
         merchant_fields = {
             "brand_name": validated_data.pop("brand_name"),
             "whatsapp_number": validated_data.pop("whatsapp_number", None),
@@ -124,13 +136,20 @@ class MerchantRegistrationSerializer(serializers.ModelSerializer):
             "brand_logo": validated_data.pop("brand_logo", None),
             "brand_logo": validated_data.pop("brand_logo", None),
         }
-
+        if fees_type:
+            merchant_fields['fees_type'] = fees_type
+        if deposit_fees:
+            merchant_fields['deposit_fees'] = deposit_fees
+        if payout_fees:
+            merchant_fields['payout_fees'] = payout_fees
+        if withdraw_fees:
+            merchant_fields['withdraw_fees'] = withdraw_fees
+        
         password = validated_data.pop("password")
         validated_data["password"] = make_password(password)
 
         with transaction.atomic():
             user = CustomUser.objects.create(**validated_data)
-
             Merchant.objects.create(
                 user=user,
                 **merchant_fields
@@ -265,7 +284,5 @@ class MerchantUserListSerializer(serializers.ModelSerializer):
             m_serializer.save()
         
         return instance
-        
-        # return super().update(instance, validated_data)
 
 
