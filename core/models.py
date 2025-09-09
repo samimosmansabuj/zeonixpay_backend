@@ -344,6 +344,8 @@ class WithdrawRequest(models.Model):
 
 # ========================================Wallet Transaction Start===================================
 class WalletTransaction(models.Model):
+    STATUS = (('pending', 'Pending'), ('success', 'Success'), ('failed', 'Failed'))
+    TRAN_TYPE = (('debit', 'Debit'), ('credit', 'Credit'))
     wallet = models.ForeignKey(MerchantWallet, on_delete=models.SET_NULL, related_name='wallet_transaction', blank=True, null=True)
     merchant = models.ForeignKey(Merchant, on_delete=models.CASCADE, related_name='wallet_transaction', blank=True, null=True)
     ip_address = models.CharField(max_length=32, blank=True, null=True)
@@ -358,11 +360,11 @@ class WalletTransaction(models.Model):
     current_balance = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     
     method = models.CharField(max_length=50, blank=True, null=True)
-    status = models.CharField(choices=[('pending', 'Pending'), ('success', 'Success'), ('failed', 'Failed')], max_length=10)
+    status = models.CharField(choices=STATUS, max_length=10)
     created_at = models.DateTimeField(auto_now_add=True)
     trx_id = models.CharField(max_length=50, null=True, blank=True)
     trx_uuid = models.CharField(max_length=50, editable=False, unique=True)
-    tran_type = models.CharField(max_length=20, choices=(('debit', 'Debit'), ('credit', 'Credit')))
+    tran_type = models.CharField(max_length=20, choices=TRAN_TYPE)
         
     def _as_decimal(self, v):
         return Decimal(str(v or '0'))

@@ -1,6 +1,6 @@
 import django_filters
 from django_filters import rest_framework as filters
-from .models import Invoice, WithdrawRequest, UserPaymentMethod, PaymentTransfer
+from .models import Invoice, WithdrawRequest, UserPaymentMethod, PaymentTransfer, WalletTransaction
 
 class InvoiceFilter(filters.FilterSet):
     created_at = django_filters.IsoDateTimeFromToRangeFilter()
@@ -43,7 +43,6 @@ class PaymentTransferFilter(filters.FilterSet):
             'receiver_number': ['exact', 'icontains'],
         }
 
-
 class UserPaymentMethodFilter(filters.FilterSet):
     class Meta:
         model = UserPaymentMethod
@@ -53,3 +52,31 @@ class UserPaymentMethodFilter(filters.FilterSet):
             'is_primary': ['exact'],
             'method_type': ['exact', 'icontains'],
         }
+
+
+class WalletTransactionFilter(filters.FilterSet):
+    created_at = django_filters.IsoDateTimeFromToRangeFilter()
+    amount = django_filters.RangeFilter()
+    status = django_filters.ChoiceFilter(choices=WalletTransaction.STATUS)
+    tran_type = django_filters.ChoiceFilter(choices=WalletTransaction.TRAN_TYPE)
+    # source = django_filters.ChoiceFilter(choices=(('payout', 'Payout'), ('withdraw', 'Withdraw'), ('deposit', 'Deposit')))
+    source = django_filters.CharFilter(method='filter_source')
+    class Meta:
+        model = WalletTransaction
+        fields = {
+            'status': ['exact', 'in'],
+            'tran_type': ['exact', 'in'],
+            'method': ['exact', 'in', 'icontains'],
+            'trx_id': ['exact', 'in', 'icontains'],
+        }
+
+    def filter_source(self, queryset, name, value):
+        if value:
+            if value.lower() == 'payout':
+                return queryset.filter(content_type__model='paymenttransfer')
+            elif value.lower() == 'withdraw':
+                return queryset.filter(content_type__model='withdrawrequest')
+            elif value.lower() == 'deposit':
+                return queryset.filter(content_type__model='invoice')
+        return queryset
+
