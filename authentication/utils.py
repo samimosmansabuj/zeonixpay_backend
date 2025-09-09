@@ -10,10 +10,13 @@ from django.contrib.auth import authenticate
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
-from .models import CustomUser, StorePaymentMessage
+from .models import CustomUser
 import random, string
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser, JSONParser, FormParser
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter
+from .filters import CustomUserFilter
 
 
 class CustomPagenumberpagination(PageNumberPagination):
@@ -143,6 +146,8 @@ class CustomMerchantUserViewsets(viewsets.ModelViewSet):
     pagination_class = CustomPagenumberpagination
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     lookup_field = "pid"
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    filterset_class = CustomUserFilter
     
     update_success_message = "User Profile Updated!"
     delete_success_message = "User Profile Deleted!"
@@ -155,12 +160,13 @@ class CustomMerchantUserViewsets(viewsets.ModelViewSet):
             raise exceptions.NotFound("User not Found with this PID")
     
     def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
         all_items = request.query_params.get('all', 'false').lower() == 'true'
         page_size = request.query_params.get(self.pagination_class.page_size_query_param)
         
         if all_items or (page_size and page_size.isdigit() and int(page_size)==0):
             try:
-                response = self.get_serializer(self.get_queryset(), many=True)
+                response = self.get_serializer(queryset, many=True)
                 return Response(
                     {
                         'status': True,
@@ -178,7 +184,7 @@ class CustomMerchantUserViewsets(viewsets.ModelViewSet):
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR
                 )
         
-        page = self.paginate_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
         if page is not None:
             response = self.get_serializer(page, many=True)
             return Response(
@@ -193,7 +199,7 @@ class CustomMerchantUserViewsets(viewsets.ModelViewSet):
             )
         else:
             try:
-                response = self.get_serializer(self.get_queryset(), many=True)
+                response = self.get_serializer(queryset, many=True)
                 return Response(
                     {
                         'status': True,
@@ -271,7 +277,8 @@ class CustomMerchantUserViewsets(viewsets.ModelViewSet):
 
 class CustomOnlyAdminCreateViewsetsViews(viewsets.ModelViewSet):
     permission_classes = [AdminAllPermission]
-    # filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [DjangoFilterBackend, SearchFilter]
+    # filterset_class = CustomUserFilter
     
     
     pagination_class = None
@@ -376,7 +383,7 @@ class CustomOnlyAdminCreateViewsetsViews(viewsets.ModelViewSet):
             )
     
     def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
+        queryset = queryset = self.filter_queryset(self.get_queryset())
         if queryset is None:
             return Response(
                 {

@@ -15,6 +15,7 @@ from django.http import Http404
 from rest_framework.parsers import MultiPartParser, JSONParser, FormParser
 from rest_framework.decorators import api_view, permission_classes
 from core.paginations import CustomPagenumberpagination
+from .filters import SmsDeviceKeyFilter
 
 
 # ========================Registration/Account Create Views Start===============================
@@ -450,6 +451,7 @@ class APIKeyDetailAPIView(APIView):
 class AdminStaffUserList(CustomMerchantUserViewsets):
     queryset = CustomUser.objects.filter(role__name__in=["Admin", "Staff"])
     serializer_class = CustomUserSerializer
+    search_fields = ['username', 'first_name', 'last_name', 'role__name', 'phone_number', 'status']
 
 class MerchatUserList(CustomMerchantUserViewsets):
     queryset = CustomUser.objects.filter(role__name="Merchant")
@@ -457,6 +459,7 @@ class MerchatUserList(CustomMerchantUserViewsets):
     update_success_message = " Merchant User Profile Updated!"
     delete_success_message = "Merchant User Profile Deleted!"
     not_found_message = "Merchant User Profile Object Not Found!"
+    search_fields = ['username', 'first_name', 'last_name', 'role__name', 'phone_number', 'status', 'merchant__brand_name', 'merchant__merchant_id', 'merchant__domain_name']
     
     def update(self, request, *args, **kwargs):
         try:
@@ -510,8 +513,8 @@ class SmsDeviceKeyViewSet(CustomOnlyAdminCreateViewsetsViews):
     serializer_class = SmsDeviceKeySerializer
     permission_classes = [AdminAllPermission]
     pagination_class = CustomPagenumberpagination
-    # filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["device_key"]
+    filterset_class = SmsDeviceKeyFilter
+    search_fields = ["device_name", "user__id"]
     ordering_fields = ["create_at", "updated_ta"]
     lookup_field = 'device_key'
     

@@ -20,8 +20,9 @@ load_dotenv()
 from django.db.models import Q, Sum, Value
 from django.db.models.functions import Coalesce
 from decimal import Decimal
-from .filters import InvoiceFilter, WithdrawRequestFilter, PaymentTransferFilter, UserPaymentMethodFilter
-
+from .filters import InvoiceFilter, WithdrawRequestFilter, PaymentTransferFilter, UserPaymentMethodFilter, WalletTransactionFilter
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter, OrderingFilter
 
 
 
@@ -823,6 +824,12 @@ class WalletTransactionViewSet(viewsets.ReadOnlyModelViewSet):
     pagination_class = CustomPagenumberpagination
     permission_classes = [IsAuthenticated]
     lookup_field = 'trx_uuid'
+
+    #filtering section====
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    search_fields = ['merchant__brand_name', 'trx_id', 'method', 'tran_type']
+    # ordering_fields = ['created_at', 'updated_at', 'amount', 'status', 'id']
+    filterset_class = WalletTransactionFilter
     
     model = WalletTransaction
     ordering_by = "-created_at"
@@ -857,7 +864,7 @@ class WalletTransactionViewSet(viewsets.ReadOnlyModelViewSet):
                 return None
     
     def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
+        queryset = self.filter_queryset(self.get_queryset())
         if queryset is None:
             return Response(
                 {
