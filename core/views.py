@@ -73,40 +73,28 @@ class CreatePayment(views.APIView):
     
     def post(self, request, *args, **kwargs):
         try:
+            print("Payment Created Function Start....")
             merchant = self.authenticate_using_api_key_and_secret(request)
             serializer = InvoiceSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             serializer.save(merchant=merchant)
             invoice = serializer.instance
-            
-            
-            
             if invoice.method and invoice.method.lower() in self.get_accepted_method():
                 if invoice.method.lower() == "bkash":
                     base = reverse('get-payment')
                     url = f"{request.build_absolute_uri(base)}?invoice_payment_id={invoice.invoice_payment_id}&method={invoice.method}"
                     # url = f"{reverse('get-payment')}?invoice_payment_id={invoice.invoice_payment_id}&method={invoice.method}"
-                    # return redirect(url)
                     paymentURL = url
                 elif invoice.method.lower() == "nagad":
-                    # return Response(
-                    #     {
-                    #         'message': 'Redirect Nagad Payment Gateway URL!'
-                    #     }
-                    # )
                     paymentURL = f"{os.getenv('PAYMENT_SITE_BASE_URL')}?invoice_payment_id={invoice.invoice_payment_id}&method={invoice.method}"
                 elif invoice.method.lower() == "rocket":
-                    # return Response(
-                    #     {
-                    #         'message': 'Redirect Nagad Payment Gateway URL!'
-                    #     }
-                    # )
                     paymentURL = f"{os.getenv('PAYMENT_SITE_BASE_URL')}?invoice_payment_id={invoice.invoice_payment_id}&method={invoice.method}"
                 else:
                     paymentURL = f"{os.getenv('PAYMENT_SITE_BASE_URL')}?invoice_payment_id={invoice.invoice_payment_id}"
             else:
-            # return redirect(f"{reverse('get-payment')}?invoice_payment_id={invoice.invoice_payment_id}")
                 paymentURL = f"{os.getenv('PAYMENT_SITE_BASE_URL')}?invoice_payment_id={invoice.invoice_payment_id}"
+            print("Payment Created Function End....")
+            print("Payment URL is: ", paymentURL)
             return Response(
                 {
                     "statusMessage": "Successful",
@@ -122,8 +110,8 @@ class CreatePayment(views.APIView):
                     "merchantInvoiceNumber": f"{invoice.merchant.merchant_id}"
                 }, status=status.HTTP_200_OK
             )
-            # return redirect(paymentURL)
         except Exception as e:
+            print("Getting Some Problem...:", e)
             return Response(
                 {
                     'status': False,
