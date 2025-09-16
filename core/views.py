@@ -45,7 +45,7 @@ class CreatePayment(views.APIView):
         # if not merchant.check_secret(secret_key):
         #     raise AuthenticationFailed("Invalid SECRET-KEY.")
         
-        # self._check_domain(request, api_key.merchant)
+        self._check_domain(request, api_key.merchant)
 
         return api_key.merchant
         
