@@ -45,7 +45,7 @@ class CreatePayment(views.APIView):
         # if not merchant.check_secret(secret_key):
         #     raise AuthenticationFailed("Invalid SECRET-KEY.")
         
-        self._check_domain(request, api_key.merchant)
+        # self._check_domain(request, api_key.merchant)
 
         return api_key.merchant
         
@@ -72,7 +72,6 @@ class CreatePayment(views.APIView):
     
     
     def post(self, request, *args, **kwargs):
-        print("Payment Created Function Start....")
         try:
             merchant = self.authenticate_using_api_key_and_secret(request)
             serializer = InvoiceSerializer(data=request.data)
@@ -93,8 +92,6 @@ class CreatePayment(views.APIView):
                     paymentURL = f"{os.getenv('PAYMENT_SITE_BASE_URL')}?invoice_payment_id={invoice.invoice_payment_id}"
             else:
                 paymentURL = f"{os.getenv('PAYMENT_SITE_BASE_URL')}?invoice_payment_id={invoice.invoice_payment_id}"
-            print("Payment Created Function End....")
-            print("Payment URL is: ", paymentURL)
             return Response(
                 {
                     "statusMessage": "Successful",
@@ -111,7 +108,6 @@ class CreatePayment(views.APIView):
                 }, status=status.HTTP_200_OK
             )
         except Exception as e:
-            print("Getting Some Problem...:", str(e))
             return Response(
                 {
                     'status': False,
