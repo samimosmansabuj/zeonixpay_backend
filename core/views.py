@@ -72,8 +72,8 @@ class CreatePayment(views.APIView):
     
     
     def post(self, request, *args, **kwargs):
+        print("Payment Created Function Start....")
         try:
-            print("Payment Created Function Start....")
             merchant = self.authenticate_using_api_key_and_secret(request)
             serializer = InvoiceSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
@@ -82,9 +82,9 @@ class CreatePayment(views.APIView):
             if invoice.method and invoice.method.lower() in self.get_accepted_method():
                 if invoice.method.lower() == "bkash":
                     base = reverse('get-payment')
-                    url = f"{request.build_absolute_uri(base)}?invoice_payment_id={invoice.invoice_payment_id}&method={invoice.method}"
+                    paymentURL = f"{request.build_absolute_uri(base)}?invoice_payment_id={invoice.invoice_payment_id}&method={invoice.method}"
                     # url = f"{reverse('get-payment')}?invoice_payment_id={invoice.invoice_payment_id}&method={invoice.method}"
-                    paymentURL = url
+                    # paymentURL = url
                 elif invoice.method.lower() == "nagad":
                     paymentURL = f"{os.getenv('PAYMENT_SITE_BASE_URL')}?invoice_payment_id={invoice.invoice_payment_id}&method={invoice.method}"
                 elif invoice.method.lower() == "rocket":
@@ -111,7 +111,7 @@ class CreatePayment(views.APIView):
                 }, status=status.HTTP_200_OK
             )
         except Exception as e:
-            print("Getting Some Problem...:", e)
+            print("Getting Some Problem...:", str(e))
             return Response(
                 {
                     'status': False,
